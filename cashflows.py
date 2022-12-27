@@ -2,7 +2,14 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Investment:
+class Inflow:
+
+    amount: float
+    description: str
+
+    
+@dataclass
+class Outflow:
 
     amount: float
     description: str
