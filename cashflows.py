@@ -3,38 +3,54 @@ import datetime
 from dataclasses import dataclass, field
 
 
-
 @dataclass
 class Cashflow(ABC):
 
     amount: float
     description: str
     date: datetime.date
-    direction: str = field(init=False, default="Cash inflow")
+    direction: str
+
+
+@dataclass
+class AdditionalLivingExpenses(Cashflow):
+    description: str = field(init=False, default="Additional living expenses")
+    direction: str = field(init=False, default="Cash outflow")
 
 
 @dataclass
 class Income(Cashflow):
-
     description: str = field(init=False, default="Income")
-
-
-@dataclass
-class OtherCashInflow(Cashflow):
-
     direction: str = field(init=False, default="Cash inflow")
 
 
 @dataclass
-class PrivatePension(Cashflow):
+class Inheritance(Cashflow):
+    description: str = field(init=False, default="Inheritance")
+    direction: str = field(init=False, default="Cash inflow")
 
+
+@dataclass
+class OtherCashInflow(Cashflow):
+    direction: str = field(init=False, default="Cash inflow")
+
+
+@dataclass
+class OtherCashOutflow(Cashflow):
+    direction: str = field(init=False, default="Cash outflow")
+
+
+@dataclass
+class PrivatePension(Cashflow):
     description: str = field(init=False, default="Private Pension")
+    direction: str = field(init=False, default="Cash inflow")
 
 
 @dataclass
 class Retirement(Cashflow):
-
     description: str = field(init=False, default="Retirement")
+    direction: str = field(init=False, default="Cash inflow")
+
 
 
 

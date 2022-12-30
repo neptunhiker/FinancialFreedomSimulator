@@ -146,7 +146,6 @@ class Simulation:
 
         # check consistency of data frames
         if not df_cash_inflows.index.equals(df_living_expenses.index):
-
             raise ValueError("Indices of data frames are not the same!")
 
         joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
@@ -164,7 +163,6 @@ class Simulation:
         joined_df.index.freq = "M"
 
         return joined_df
-
 
     def _create_disinvestments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
         """
@@ -216,9 +214,9 @@ class Simulation:
 
 if __name__ == '__main__':
     investor = Investor("John", "Doe", datetime.date(1990, 12, 23),
-                                       living_expenses=3000,
-                                       target_investment_amount=4000.0)
+                        living_expenses=3000,
+                        target_investment_amount=4000.0)
     simulation = Simulation(starting_date=datetime.date(2022, 1, 22),
-                                           ending_date=datetime.date(2080, 5, 28),
-                                           investor=investor)
+                            ending_date=datetime.date(2080, 5, 28),
+                            investor=investor)
     simulation.create_df_of_investments_and_disinvestments()
