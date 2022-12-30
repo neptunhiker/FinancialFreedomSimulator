@@ -97,7 +97,7 @@ class TestSimulationAddingCashflows(unittest.TestCase):
         self.simulation = simulator.Simulation(starting_date=datetime.date(2023, 12, 2),
                                                ending_date=datetime.date(2080, 12, 30), investor=self.investor)
 
-    def test_adding_cash_inflow(self):
+    def test_adding_cashflows(self):
         cash_inflow = cashflows.Income(2000, datetime.date(2030, 12, 12))
         self.simulation.add_cashflow(cash_inflow)
         expected_df = pd.DataFrame(columns=["Date", "Investor age", "CF direction", "Amount", "Type"],
@@ -127,7 +127,7 @@ class TestSimulationCreatingNetCashflows(unittest.TestCase):
 
     def test_net_cashflow(self):
         expected_df = pd.DataFrame(
-            columns=["Date", "Cash inflow"],
+            columns=["Date", "Cashflow"],
             data=[
                 [datetime.date(2029, 12, 31), 0.0],
                 [datetime.date(2030, 1, 31), 5000.0],
@@ -197,10 +197,10 @@ class TestSimulationLivingExpenses(unittest.TestCase):
 class TestInvestmentDataframe(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.df = pd.DataFrame(columns=["Cash inflow", "Living expenses"],
+        self.df = pd.DataFrame(columns=["Cashflow", "Living expenses"],
                                index=pd.date_range(datetime.date(2022, 1, 22), datetime.date(2022, 5, 28), freq="M"),
                                data=[[8000, 3000], [6000, 3200], [0, 3400], [1200, 3800]])
-        self.cash_inflows = self.df["Cash inflow"].to_frame()
+        self.cash_inflows = self.df["Cashflow"].to_frame()
         self.living_expenses = self.df["Living expenses"].to_frame()
         self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23),
                                            living_expenses=3000,
@@ -212,7 +212,8 @@ class TestInvestmentDataframe(unittest.TestCase):
     def test_investment_dataframe(self):
         expected_df = self.df.copy()
         first_investment = (1 + self.simulation.inflation) ** \
-                           ((datetime.date(2022, 1, 31) - datetime.date(2022, 1, 22)).days / 365.25) * self.investor.target_investment_amount
+                           ((datetime.date(2022, 1, 31) - datetime.date(2022, 1,
+                                                                        22)).days / 365.25) * self.investor.target_investment_amount
         expected_df["Investments"] = [first_investment, 2800.0, 0.0, 0.0]
         expected_df.index.name = "Date"
         calculated_df = self.simulation._create_investments(self.cash_inflows, self.living_expenses)
@@ -237,22 +238,41 @@ class TestInvestmentsAndDisinvestments(unittest.TestCase):
                                                ending_date=datetime.date(2022, 5, 28),
                                                investor=self.investor,
                                                inflation=0.0)
-        self.simulation.add_cashflow(cashflows.Income(8000, datetime.date(2022,1,12)))
-        self.simulation.add_cashflow(cashflows.Income(6000, datetime.date(2022,2,19)))
-        self.simulation.add_cashflow(cashflows.Income(1200, datetime.date(2022,4,29)))
+        self.simulation.add_cashflow(cashflows.Income(8000, datetime.date(2022, 1, 12)))
+        self.simulation.add_cashflow(cashflows.Income(6000, datetime.date(2022, 2, 19)))
+        self.simulation.add_cashflow(cashflows.Income(1200, datetime.date(2022, 4, 29)))
         data = [[8000, 3000, 4000, 0], [6000, 3000, 3000, 0], [0, 3000, 0, 5000], [1200, 3000, 0, 3000]]
         data = [list(map(float, sublist)) for sublist in data]
-        self.df = pd.DataFrame(columns=["Cash inflow", "Living expenses", "Investments", "Disinvestments"],
+        self.df = pd.DataFrame(columns=["Cashflow", "Living expenses", "Investments", "Disinvestments"],
                                index=pd.date_range(datetime.date(2022, 1, 22), datetime.date(2022, 5, 28), freq="M"),
                                data=data)
-        self.cash_inflows = self.df["Cash inflow"].to_frame()
+        self.cash_inflows = self.df["Cashflow"].to_frame()
         self.living_expenses = self.df["Living expenses"].to_frame()
         self.investments = self.df[["Living expenses", "Investments"]].copy()
         self.disinvestments = self.df[["Living expenses", "Disinvestments"]].copy()
 
     def test_concatenation_working_out(self):
-
         expected_df = self.df
         expected_df.index.name = "Date"
         calculated_df = self.simulation.create_df_of_investments_and_disinvestments()
         pd.testing.assert_frame_equal(expected_df, calculated_df)
+
+
+class TestAdditionalLivingExpenses(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23),
+                                           living_expenses=1000,
+                                           target_investment_amount=4000.0,
+                                           tax_rate=0.0)
+        self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
+                                               ending_date=datetime.date(2022, 5, 28),
+                                               investor=self.investor,
+                                               inflation=0.0)
+        self.simulation.add_cashflow(cashflows.Income(8000, datetime.date(2022, 1, 12)))
+        self.simulation.add_cashflow(cashflows.Income(6000, datetime.date(2022, 2, 19)))
+        self.simulation.add_cashflow(cashflows.AdditionalLivingExpenses(6000, datetime.date(2022, 4, 23)))
+
+    def test_additional_living_expenses(self):
+        calculated_df = self.simulation.create_df_of_investments_and_disinvestments()
+        print(calculated_df)

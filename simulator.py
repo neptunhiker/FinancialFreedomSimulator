@@ -88,13 +88,19 @@ class Simulation:
         self.investor = investor
         self.inflation = inflation
 
-    def add_cashflow(self, cash_inflow: cashflows.Cashflow):
+    def add_cashflow(self, cashflow: cashflows.Cashflow):
         """Add a cash inflow to the gross cashflows"""
-        investor_age = determine_investor_age(date=cash_inflow.date, investor_birthdate=self.investor.birthdate)
-        new_df = pd.DataFrame(columns=self.gross_cash_flows.columns, data=[[cash_inflow.date, investor_age,
-                                                                            cash_inflow.direction,
-                                                                            float(cash_inflow.amount),
-                                                                            cash_inflow.description]])
+        investor_age = determine_investor_age(date=cashflow.date, investor_birthdate=self.investor.birthdate)
+        if cashflow.direction == "Cash inflow":
+            amount = float(cashflow.amount)
+        elif cashflow.direction == "Cash outflow":
+            amount = float(-cashflow.amount)
+        else:
+            raise ValueError("Unknown cashflow direction.")
+        new_df = pd.DataFrame(columns=self.gross_cash_flows.columns, data=[[cashflow.date, investor_age,
+                                                                            cashflow.direction,
+                                                                            float(amount),
+                                                                            cashflow.description]])
         self.gross_cash_flows = pd.concat([self.gross_cash_flows, new_df], ignore_index=True)
 
     def _create_net_cashflows(self) -> pd.DataFrame:
@@ -105,7 +111,7 @@ class Simulation:
         gross_df.set_index("Date", inplace=True)
         gross_df.index = pd.to_datetime(gross_df.index)
         grouped = gross_df.groupby(pd.Grouper(freq="M")).sum()
-        grouped.rename(columns={"Amount": "Cash inflow"}, inplace=True)
+        grouped.rename(columns={"Amount": "Cashflow"}, inplace=True)
 
         # reindex dataframe so that the index date covers the entire simulation time period
         idx = pd.date_range(self.starting_date, self.ending_date, freq="M")
@@ -118,10 +124,10 @@ class Simulation:
 
         # fill dataframe with zeroes if dataframe is otherwise empty
         if grouped.empty:
-            grouped["Cash inflow"] = np.zeros(len(grouped))
+            grouped["Cashflow"] = np.zeros(len(grouped))
 
         # fill NaN values with zeroes
-        grouped["Cash inflow"] = grouped["Cash inflow"].fillna(0)
+        grouped["Cashflow"] = grouped["Cashflow"].fillna(0)
 
         return grouped
 
@@ -153,7 +159,7 @@ class Simulation:
         joined_df.rename(columns={"index": "Date"}, inplace=True)
         joined_df["Date"] = pd.to_datetime(joined_df["Date"])
         joined_df["Investments"] = joined_df.apply(lambda x: determine_investment(
-            cash_inflow=x["Cash inflow"],
+            cash_inflow=x["Cashflow"],
             living_expenses=x["Living expenses"],
             target_investment=self.investor.target_investment_amount *
                               (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25)
@@ -180,7 +186,7 @@ class Simulation:
         joined_df.rename(columns={"index": "Date"}, inplace=True)
         joined_df["Date"] = pd.to_datetime(joined_df["Date"])
         joined_df["Disinvestments"] = joined_df.apply(lambda x: determine_disinvestment(
-            cash_inflow=x["Cash inflow"],
+            cash_inflow=x["Cashflow"],
             living_expenses=x["Living expenses"],
             tax_rate=self.investor.tax_rate
         ), axis=1)
@@ -199,7 +205,7 @@ class Simulation:
         df_disinvestments = self._create_disinvestments(df_net_cashflows, df_living_expenses)
 
         # check that net cash flows and living expenses are the same
-        if not df_investments["Cash inflow"].equals(df_disinvestments["Cash inflow"]):
+        if not df_investments["Cashflow"].equals(df_disinvestments["Cashflow"]):
             raise ValueError("Series for net cash inflows are not the same!")
         if not df_investments["Living expenses"].equals(df_disinvestments["Living expenses"]):
             raise ValueError("Series for living expenses are not the same!")
