@@ -1,3 +1,4 @@
+import calendar
 from dataclasses import dataclass
 import datetime
 
@@ -5,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import cashflows
+import returngens
 
 
 def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float) -> float:
@@ -81,12 +83,13 @@ class Portfolio:
 class Simulation:
 
     def __init__(self, starting_date: datetime.date, ending_date: datetime.date, investor: Investor,
-                 inflation: float = 0.02):
+                 inflation: float = 0.02, return_generator: returngens.ReturnGenerator = returngens.GBM(0.07, 0.2)):
         self.starting_date = starting_date
         self.ending_date = ending_date
         self.gross_cash_flows = pd.DataFrame(columns=["Date", "Investor age", "CF direction", "Amount", "Type"])
         self.investor = investor
         self.inflation = inflation
+        self.return_generator = return_generator
 
     def add_cashflow(self, cashflow: cashflows.Cashflow):
         """Add a cash inflow to the gross cashflows"""
@@ -103,6 +106,21 @@ class Simulation:
                                                                             cashflow.description]])
         self.gross_cash_flows = pd.concat([self.gross_cash_flows, new_df], ignore_index=True)
 
+    def add_recurring_cashflows(self, cashflow: cashflows.Cashflow, ending_date: datetime.date,
+                                perc_increase_per_year: float = 0) -> None:
+        """Add recurring cashflows to the simulation"""
+
+        _, days_in_month = calendar.monthrange(ending_date.year, ending_date.month)
+        ending_date = datetime.date(year=ending_date.year, month=ending_date.month, day=days_in_month)
+        date_range = pd.date_range(cashflow.date, ending_date, freq="M")
+        print(date_range)
+        for date in date_range:
+            t = (date.date() - cashflow.date).days / 365.25
+            amount = cashflow.amount * (1 + perc_increase_per_year) ** t
+            new_cf = cashflows.Cashflow(amount=amount, description=cashflow.description, date=date.date(),
+                                        direction=cashflow.direction)
+            self.add_cashflow(new_cf)
+
     def _create_net_cashflows(self) -> pd.DataFrame:
         """Create a dataframe of net cash flows out of gross cash flows"""
 
@@ -110,7 +128,7 @@ class Simulation:
         gross_df.drop(["Investor age"], axis=1, inplace=True)
         gross_df.set_index("Date", inplace=True)
         gross_df.index = pd.to_datetime(gross_df.index)
-        grouped = gross_df.groupby(pd.Grouper(freq="M")).sum()
+        grouped = gross_df.groupby(pd.Grouper(freq="M")).sum(numeric_only=True)
         grouped.rename(columns={"Amount": "Cashflow"}, inplace=True)
 
         # reindex dataframe so that the index date covers the entire simulation time period
@@ -218,6 +236,21 @@ class Simulation:
         return df_complete
 
 
+    def create_portfolio_valuations(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create a dataframe that simulates the portfolio valuation
+
+        df: pd.DataFrame - a dataframe that contains investments and disinvestments over time
+        """
+
+        # check that provided dataframe has the right data
+        if "Investments" not in df.columns and "Disinvestments" not in df.columns:
+            raise ValueError("Provided dataframe must contain entries for investments and disinvestments")
+
+        # add a column for the return data (needs to be simulated)
+        df["Log return"] = self.ret
+        # add additional columns for PF valuation at the beginning and end of period
+        # loop through dataframe and update portfolio values
+
 if __name__ == '__main__':
     investor = Investor("John", "Doe", datetime.date(1990, 12, 23),
                         living_expenses=3000,
@@ -225,4 +258,6 @@ if __name__ == '__main__':
     simulation = Simulation(starting_date=datetime.date(2022, 1, 22),
                             ending_date=datetime.date(2080, 5, 28),
                             investor=investor)
+
     simulation.create_df_of_investments_and_disinvestments()
+    print(simulation.gross_cash_flows)

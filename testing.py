@@ -274,5 +274,39 @@ class TestAdditionalLivingExpenses(unittest.TestCase):
         self.simulation.add_cashflow(cashflows.AdditionalLivingExpenses(6000, datetime.date(2022, 4, 23)))
 
     def test_additional_living_expenses(self):
+        expected_df = pd.DataFrame(
+            index=pd.date_range(datetime.date(2022, 1, 22), datetime.date(2022, 5, 28), freq="M"),
+            columns=["Cashflow", "Living expenses", "Investments", "Disinvestments"],
+            data=[[8000.0, 1000.0, 4000.0, 0.0], [6000.0, 1000.0, 4000.0, 0.0], [0.0, 1000.0, 0.0, 1000.0],
+                  [-6000.0, 1000.0, 0.0, 7000.0]])
+        expected_df.index.freq = "M"
+        expected_df.index.name = "Date"
         calculated_df = self.simulation.create_df_of_investments_and_disinvestments()
-        print(calculated_df)
+        pd.testing.assert_frame_equal(expected_df, calculated_df)
+
+
+class TestAddingRecurringCashflows(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23),
+                                           living_expenses=1000,
+                                           target_investment_amount=4000.0,
+                                           tax_rate=0.0)
+        self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
+                                               ending_date=datetime.date(2022, 7, 28),
+                                               investor=self.investor,
+                                               inflation=0.0)
+        self.simulation.add_recurring_cashflows(cashflow=cashflows.Income(4000, datetime.date(2022, 1, 28)),
+                                                ending_date=datetime.date(2022, 4, 28),
+                                                perc_increase_per_year=0.0)
+
+    def test_recurring_cash_flows(self):
+        expected_df = pd.DataFrame(
+            index=pd.date_range(datetime.date(2022, 1, 22), datetime.date(2022, 7, 28), freq="M"),
+            columns=["Cashflow", "Living expenses", "Investments", "Disinvestments"],
+            data=[[4000.0, 1000.0, 3000.0, 0.0], [4000.0, 1000.0, 3000.0, 0.0], [4000.0, 1000.0, 3000.0, 0.0],
+                  [4000.0, 1000.0, 3000.0, 0.0], [0.0, 1000.0, 0.0, 1000.0], [0.0, 1000.0, 0.0, 1000.0]])
+        expected_df.index.freq = "M"
+        expected_df.index.name = "Date"
+        calculated_df = self.simulation.create_df_of_investments_and_disinvestments()
+        pd.testing.assert_frame_equal(expected_df, calculated_df)
