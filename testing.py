@@ -1,7 +1,6 @@
 import datetime
 import unittest
 
-from dateutil.relativedelta import relativedelta
 import pandas as pd
 
 import cashflows
@@ -63,6 +62,15 @@ class TestHelperFunctions(unittest.TestCase):
         target_investment_amount = 4000
         expected_investment = 4000
         calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
+        self.assertEqual(expected_investment, calculated_investment)
+
+    def test_determine_investment_high_income_and_no_cap(self):
+        cash_inflow = 10000
+        living_expenses = 3600
+        target_investment_amount = 4000
+        expected_investment = 6400
+        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount,
+                                                               investment_cap=False)
         self.assertEqual(expected_investment, calculated_investment)
 
     def test_determine_investment_low_income(self):

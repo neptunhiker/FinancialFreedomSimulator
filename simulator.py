@@ -1,7 +1,9 @@
 import calendar
+import math
 from dataclasses import dataclass
 import datetime
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -25,7 +27,8 @@ def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate
     return max((living_expenses - cash_inflow) / (1 - tax_rate), 0)
 
 
-def determine_investment(cash_inflow: float, living_expenses: float, target_investment: float) -> float:
+def determine_investment(cash_inflow: float, living_expenses: float, target_investment: float,
+                         investment_cap: bool = True) -> float:
     """
     Determine an investment amount
 
@@ -34,7 +37,11 @@ def determine_investment(cash_inflow: float, living_expenses: float, target_inve
     target_investment: float - the amount which is intended to be saved as a maximum for that month
     """
 
-    return float(max(min(cash_inflow - living_expenses, target_investment), 0))
+    if investment_cap:
+        return float(max(min(cash_inflow - living_expenses, target_investment), 0))
+    else:
+        return float(max(cash_inflow - living_expenses, 0))
+
 
 
 def determine_investor_age(date: datetime.date, investor_birthdate: datetime.date) -> float:
@@ -71,7 +78,9 @@ class Investor:
     birthdate: datetime.date
     living_expenses: float = 4000.0
     target_investment_amount: float = 4000.0
+    investment_cap: bool = True
     tax_rate: float = 0.05
+    current_portfolio_value: float = 200000
 
 
 @dataclass
@@ -87,6 +96,7 @@ class Simulation:
         self.starting_date = starting_date
         self.ending_date = ending_date
         self.gross_cash_flows = pd.DataFrame(columns=["Date", "Investor age", "CF direction", "Amount", "Type"])
+        self.investments_disinvestments = pd.DataFrame()
         self.investor = investor
         self.inflation = inflation
         self.return_generator = return_generator
@@ -113,7 +123,6 @@ class Simulation:
         _, days_in_month = calendar.monthrange(ending_date.year, ending_date.month)
         ending_date = datetime.date(year=ending_date.year, month=ending_date.month, day=days_in_month)
         date_range = pd.date_range(cashflow.date, ending_date, freq="M")
-        print(date_range)
         for date in date_range:
             t = (date.date() - cashflow.date).days / 365.25
             amount = cashflow.amount * (1 + perc_increase_per_year) ** t
@@ -180,7 +189,8 @@ class Simulation:
             cash_inflow=x["Cashflow"],
             living_expenses=x["Living expenses"],
             target_investment=self.investor.target_investment_amount *
-                              (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25)
+                              (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25),
+            investment_cap=self.investor.investment_cap
         ), axis=1)
 
         joined_df.set_index(["Date"], inplace=True)
@@ -233,31 +243,84 @@ class Simulation:
         # remove duplicate columns (living expenses and cash inflows should be in twice)
         df_complete = df_complete.loc[:, ~df_complete.columns.duplicated()].copy()
 
+        self.investments_disinvestments = df_complete
+
         return df_complete
 
-
-    def create_portfolio_valuations(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create a dataframe that simulates the portfolio valuation
-
-        df: pd.DataFrame - a dataframe that contains investments and disinvestments over time
+    def create_portfolio_valuations(self) -> pd.DataFrame:
+        """
+        Create a dataframe that simulates the portfolio valuation
         """
 
-        # check that provided dataframe has the right data
-        if "Investments" not in df.columns and "Disinvestments" not in df.columns:
-            raise ValueError("Provided dataframe must contain entries for investments and disinvestments")
+        # check that a dataframe for investments and disinvestments has already been generated
+        if "Investments" not in self.investments_disinvestments.columns and \
+                "Disinvestments" not in self.investments_disinvestments.columns:
+            raise ValueError("Before being able to create portfolio valuations a dataframe needs to be created "
+                             "that contains investments and disinvestments")
+
+        df = self.investments_disinvestments.copy()
 
         # add a column for the return data (needs to be simulated)
-        df["Log return"] = self.ret
+        df["Log return"] = self.return_generator.generate_monthly_returns(n=len(self.investments_disinvestments)).values
+
         # add additional columns for PF valuation at the beginning and end of period
+        df["PF Beg"] = np.zeros(len(df))
+        df["PF End"] = np.zeros(len(df))
+
         # loop through dataframe and update portfolio values
+        counter = 0
+        for index, row in df.iterrows():
+            if counter == 0:
+                row["PF Beg"] = self.investor.current_portfolio_value
+            else:
+                row["PF Beg"] = df.loc[previous_index, "PF End"]
+
+            row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
+
+            previous_index = index
+            counter += 1
+
+        return df
+
+    def run_simulation(self, n: int = 10):
+        """Run the simulation"""
+
+        results = []
+        for i in range(n):
+            results.append(self.create_portfolio_valuations())
+
+        for result in results:
+            plt.plot(result.index, result["PF End"])
+
+        # plt.ylim(0, 2000000)
+        plt.show()
+
 
 if __name__ == '__main__':
-    investor = Investor("John", "Doe", datetime.date(1990, 12, 23),
-                        living_expenses=3000,
-                        target_investment_amount=4000.0)
-    simulation = Simulation(starting_date=datetime.date(2022, 1, 22),
-                            ending_date=datetime.date(2080, 5, 28),
-                            investor=investor)
+    pd.set_option('display.max_columns', None)
 
+    investor = Investor("John", "Doe", datetime.date(1984, 1, 22),
+                        living_expenses=3000,
+                        target_investment_amount=4000.0,
+                        investment_cap=False,
+                        tax_rate=0.05)
+    simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
+                            ending_date=datetime.date(2084, 1, 22),
+                            investor=investor,
+                            inflation=0.03,
+                            return_generator=returngens.GBM(0.05, 0.001))
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)), ending_date=
+                                       datetime.date(2033, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)), ending_date=
+                                       datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2045, 1, 29)), ending_date=
+                                       datetime.date(2052, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2000, datetime.date(2051, 1, 29)), ending_date=
+                                       simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)), ending_date=
+                                       simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
     simulation.create_df_of_investments_and_disinvestments()
-    print(simulation.gross_cash_flows)
+    df = simulation.create_portfolio_valuations()
+    simulation.run_simulation(n=3)
+
