@@ -3,12 +3,47 @@ import math
 from dataclasses import dataclass
 import datetime
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pprint import pprint
+from typing import List, Union
 
 import cashflows
 import returngens
+
+
+def analyze_survival_probability(list_of_pf_valuations: List[pd.Series]) -> float:
+    """Analyze how many portfolios of the simulation would have survived with a value greater than zero throughout time"""
+
+    survivals = []
+    for series in list_of_pf_valuations:
+        survivals.append(determine_survival(series))
+
+    return sum(survivals) / len(survivals)
+
+
+def determine_portfolio_death(series: pd.Series) -> Union[int, float]:
+    """
+    Determine the point in time of a portfolio having a negative valuation
+
+    series: pd.Series - a series of (portfolio) values
+    """
+
+    if determine_survival(series):
+        return np.nan
+    else:
+        return int(np.argmax(series.lt(0).to_numpy(), axis=0))
+
+
+def determine_survival(series: pd.Series) -> bool:
+    """
+    Determine whether a portfolio has always been positive in value over time
+
+    series: pd.Series - a series of (portflio) values
+    """
+    return (series >= 0).all()
 
 
 def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float) -> float:
@@ -41,7 +76,6 @@ def determine_investment(cash_inflow: float, living_expenses: float, target_inve
         return float(max(min(cash_inflow - living_expenses, target_investment), 0))
     else:
         return float(max(cash_inflow - living_expenses, 0))
-
 
 
 def determine_investor_age(date: datetime.date, investor_birthdate: datetime.date) -> float:
@@ -82,6 +116,10 @@ class Investor:
     tax_rate: float = 0.05
     current_portfolio_value: float = 200000
 
+    @property
+    def name(self):
+        return f"{self.first_name} {self.last_name}"
+
 
 @dataclass
 class Portfolio:
@@ -100,6 +138,7 @@ class Simulation:
         self.investor = investor
         self.inflation = inflation
         self.return_generator = return_generator
+        self.results = dict()
 
     def add_cashflow(self, cashflow: cashflows.Cashflow):
         """Add a cash inflow to the gross cashflows"""
@@ -282,18 +321,70 @@ class Simulation:
 
         return df
 
-    def run_simulation(self, n: int = 10):
+    def run_simulation(self, n: int = 10) -> None:
         """Run the simulation"""
 
-        results = []
         for i in range(n):
-            results.append(self.create_portfolio_valuations())
+            self.results[i] = self.create_portfolio_valuations()
 
-        for result in results:
-            plt.plot(result.index, result["PF End"])
+    def plot_results(self) -> None:
+        """Plot the simulation results"""
 
-        # plt.ylim(0, 2000000)
+        fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 6))
+        fig.suptitle(f'Financial Freedom Simulator for {self.investor.name}', fontsize=20)
+
+        # ax1
+        for sim_run, df in self.results.items():
+            ax1.plot(df.index, df["PF End"])
+        ax1.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
+        ax1.axvline(datetime.date(2051, 1, 31), linestyle="--", color="black")
+        ax1.set_ylim(0, 2000000)
+        ax1.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+
+        # ax2
+        # ax2.plot(self.investments_disinvestments.index, self.investments_disinvestments["Cashflow"], label="Cashflow")
+        # ax2.plot(self.investments_disinvestments.index, self.investments_disinvestments["Living expenses"], label="Living expenses")
+        # ax2.legend()
+        # ax2.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+
+        # ax3
+        # todo: put the calculations outside of the method for plotting
+        pf_valuations_05 = dict()
+        pf_valuations_95 = dict()
+        for date in self.investments_disinvestments.index:
+            valuations = []
+            for df in self.results.values():
+                valuations.append(int(df.loc[date, "PF End"])/1000)
+            pf_valuations_05[date] = np.percentile(valuations, 5)
+            pf_valuations_95[date] = np.percentile(valuations, 95)
+        ax2.plot(pf_valuations_05.keys(), pf_valuations_05.values())
+        ax2.plot(pf_valuations_95.keys(), pf_valuations_95.values())
+        ax2.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
+
         plt.show()
+
+    def analyze_results(self) -> dict:
+        """Analyze the portfolio results"""
+
+        results = dict()
+
+        # survival probability
+        pf_valuations = []
+        for df in self.results.values():
+            pf_valuations.append(df["PF End"])
+        results["Survival probability"] = analyze_survival_probability(pf_valuations)
+
+        # earliest portfolio death, i.e. valuation < 0
+        if results["Survival probability"] == 1.0:
+            results["Earliest portfolio death"] = "All portfolios survived"
+        else:
+            pf_valuation_dates = self.results[0].index
+            pf_deaths = []
+            for pf_valuation in pf_valuations:
+                pf_deaths.append(determine_portfolio_death(pf_valuation))
+            results["Earliest portfolio death"] = pf_valuation_dates[int(np.nanmin(pf_deaths))].date()
+
+        return results
 
 
 if __name__ == '__main__':
@@ -303,24 +394,29 @@ if __name__ == '__main__':
                         living_expenses=3000,
                         target_investment_amount=4000.0,
                         investment_cap=False,
-                        tax_rate=0.05)
+                        tax_rate=0.05,
+                        current_portfolio_value=200000)
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
                             ending_date=datetime.date(2084, 1, 22),
                             investor=investor,
                             inflation=0.03,
-                            return_generator=returngens.GBM(0.05, 0.001))
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)), ending_date=
-                                       datetime.date(2033, 1, 23), perc_increase_per_year=0.01)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)), ending_date=
-                                       datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2045, 1, 29)), ending_date=
-                                       datetime.date(2052, 1, 23), perc_increase_per_year=0.01)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2000, datetime.date(2051, 1, 29)), ending_date=
-                                       simulation.ending_date, perc_increase_per_year=0.02)
-    simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)), ending_date=
-                                       simulation.ending_date, perc_increase_per_year=0.02)
+                            return_generator=returngens.GBM(
+                                yearly_return=0.08,
+                                yearly_vola=0.15))
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
+                                       ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
+                                       ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2042, 1, 29)),
+                                       ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
+                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)),
+                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
+
     simulation.create_df_of_investments_and_disinvestments()
     df = simulation.create_portfolio_valuations()
-    simulation.run_simulation(n=3)
-
+    simulation.run_simulation(n=100)
+    pprint(simulation.analyze_results())
+    simulation.plot_results()

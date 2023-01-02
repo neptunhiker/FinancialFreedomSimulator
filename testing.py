@@ -1,6 +1,8 @@
 import datetime
+import math
 import unittest
 
+import numpy as np
 import pandas as pd
 
 import cashflows
@@ -318,3 +320,30 @@ class TestAddingRecurringCashflows(unittest.TestCase):
         expected_df.index.name = "Date"
         calculated_df = self.simulation.create_df_of_investments_and_disinvestments()
         pd.testing.assert_frame_equal(expected_df, calculated_df)
+
+
+class TestAnalysisOfSimulationResults(unittest.TestCase):
+
+    def test_survival_of_portfolio_true(self):
+        series = pd.Series(data=[23, 0, 12, 45])
+        self.assertTrue(simulator.determine_survival(series))
+
+    def test_survival_of_portfolio_false(self):
+        series = pd.Series(data=[23, 0, -2, 45])
+        self.assertFalse(simulator.determine_survival(series))
+
+    def test_timing_of_portfolio_death(self):
+        self.assertEqual(3, simulator.determine_portfolio_death(pd.Series(data=[23, 0, 2, -5])))
+        self.assertEqual(0, simulator.determine_portfolio_death(pd.Series(data=[-2, 0, 2, -5])))
+        self.assertEqual(1, simulator.determine_portfolio_death(pd.Series(data=[23, -3, 2, -5])))
+        self.assertTrue(math.isnan(simulator.determine_portfolio_death(pd.Series(data=[23, 3, 2, 232]))))
+
+    def test_survival_probability(self):
+        series_01 = pd.Series(data=[23, 0, 2, -5])
+        series_02 = pd.Series(data=[23, 0, 2, 12])
+        series_03 = pd.Series(data=[23, 0, 2, 16])
+        series_04 = pd.Series(data=[23, 0, 2, 99])
+        expected_result = 0.75
+        calculated_result = simulator.analyze_survival_probability([series_01, series_02, series_03, series_04])
+
+        self.assertEqual(expected_result, calculated_result)
