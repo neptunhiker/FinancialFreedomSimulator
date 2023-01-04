@@ -314,7 +314,10 @@ class Simulation:
             else:
                 row["PF Beg"] = df.loc[previous_index, "PF End"]
 
-            row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
+            if row["PF Beg"] < 0:
+                row["PF End"] = row["PF Beg"] + row["Investments"] - row["Disinvestments"]
+            else:
+                row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
 
             previous_index = index
             counter += 1
@@ -338,7 +341,7 @@ class Simulation:
             ax1.plot(df.index, df["PF End"])
         ax1.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
         ax1.axvline(datetime.date(2051, 1, 31), linestyle="--", color="black")
-        ax1.set_ylim(0, 2000000)
+        ax1.set_ylim(-3000000, 30000000)
         ax1.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
 
         # ax2
@@ -349,17 +352,19 @@ class Simulation:
 
         # ax3
         # todo: put the calculations outside of the method for plotting
-        pf_valuations_05 = dict()
-        pf_valuations_95 = dict()
+        pf_valuations_lower_percentile = dict()
+        pf_valuations_upper_percentile = dict()
         for date in self.investments_disinvestments.index:
             valuations = []
             for df in self.results.values():
-                valuations.append(int(df.loc[date, "PF End"])/1000)
-            pf_valuations_05[date] = np.percentile(valuations, 5)
-            pf_valuations_95[date] = np.percentile(valuations, 95)
-        ax2.plot(pf_valuations_05.keys(), pf_valuations_05.values())
-        ax2.plot(pf_valuations_95.keys(), pf_valuations_95.values())
+                valuations.append(int(df.loc[date, "PF End"]))
+            pf_valuations_lower_percentile[date] = np.percentile(valuations, 75)
+            pf_valuations_upper_percentile[date] = np.percentile(valuations, 25)
+        ax2.plot(pf_valuations_lower_percentile.keys(), pf_valuations_lower_percentile.values())
+        ax2.plot(pf_valuations_upper_percentile.keys(), pf_valuations_upper_percentile.values())
         ax2.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
+        ax2.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+
 
         plt.show()
 
@@ -390,29 +395,39 @@ class Simulation:
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
 
-    investor = Investor("John", "Doe", datetime.date(1984, 1, 22),
-                        living_expenses=3000,
-                        target_investment_amount=4000.0,
-                        investment_cap=False,
+    # investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
+    #                     living_expenses=3000,
+    #                     target_investment_amount=4000.0,
+    #                     investment_cap=False,
+    #                     tax_rate=0.05,
+    #                     current_portfolio_value=200000)
+    investor = Investor("Me", "Lady", datetime.date(1984, 1, 22),
+                        living_expenses=1500,
+                        target_investment_amount=500.0,
+                        investment_cap=True,
                         tax_rate=0.05,
-                        current_portfolio_value=200000)
+                        current_portfolio_value=13000)
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
-                            ending_date=datetime.date(2084, 1, 22),
+                            ending_date=datetime.date(2084, 12, 12),
                             investor=investor,
                             inflation=0.03,
                             return_generator=returngens.GBM(
                                 yearly_return=0.08,
                                 yearly_vola=0.15))
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
-                                       ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
-                                       ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2042, 1, 29)),
-                                       ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
+    #                                    ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2023, 1, 29)),
+                                       ending_date=datetime.date(2051, 12, 9), perc_increase_per_year=0.04)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
+    #                                    ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2042, 1, 29)),
+    #                                    ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
+    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(1000, datetime.date(2051, 12, 9)),
                                        ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)),
-                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)),
+    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
 
     simulation.create_df_of_investments_and_disinvestments()
