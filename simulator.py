@@ -325,7 +325,13 @@ class Simulation:
         return df
 
     def run_simulation(self, n: int = 10) -> None:
-        """Run the simulation"""
+        """
+        Run the simulation
+
+        n: int - number of simulations
+        """
+
+        self.create_df_of_investments_and_disinvestments()
 
         for i in range(n):
             self.results[i] = self.create_portfolio_valuations()
@@ -430,8 +436,8 @@ if __name__ == '__main__':
     #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
 
-    simulation.create_df_of_investments_and_disinvestments()
-    df = simulation.create_portfolio_valuations()
-    simulation.run_simulation(n=100)
+    # simulation.create_df_of_investments_and_disinvestments()
+    # df = simulation.create_portfolio_valuations()
+    simulation.run_simulation(n=2)
     pprint(simulation.analyze_results())
     simulation.plot_results()
