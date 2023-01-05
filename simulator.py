@@ -350,27 +350,28 @@ class Simulation:
         ax1.set_ylim(-3000000, 30000000)
         ax1.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
 
-        # ax2
-        # ax2.plot(self.investments_disinvestments.index, self.investments_disinvestments["Cashflow"], label="Cashflow")
-        # ax2.plot(self.investments_disinvestments.index, self.investments_disinvestments["Living expenses"], label="Living expenses")
-        # ax2.legend()
-        # ax2.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-
-        # ax3
         # todo: put the calculations outside of the method for plotting
         pf_valuations_lower_percentile = dict()
+        pf_valuations_median = dict()
         pf_valuations_upper_percentile = dict()
+        lower_percentile = 10
+        upper_percentile = 90
         for date in self.investments_disinvestments.index:
             valuations = []
             for df in self.results.values():
                 valuations.append(int(df.loc[date, "PF End"]))
-            pf_valuations_lower_percentile[date] = np.percentile(valuations, 75)
-            pf_valuations_upper_percentile[date] = np.percentile(valuations, 25)
-        ax2.plot(pf_valuations_lower_percentile.keys(), pf_valuations_lower_percentile.values())
-        ax2.plot(pf_valuations_upper_percentile.keys(), pf_valuations_upper_percentile.values())
+            pf_valuations_lower_percentile[date] = np.percentile(valuations, lower_percentile)
+            pf_valuations_median[date] = np.percentile(valuations, 50)
+            pf_valuations_upper_percentile[date] = np.percentile(valuations, upper_percentile)
+        ax2.plot(pf_valuations_upper_percentile.keys(), pf_valuations_upper_percentile.values(),
+                 label=f"{upper_percentile} % percentile")
+        ax2.plot(pf_valuations_median.keys(), pf_valuations_median.values(),
+                 label=f"{50} % percentile")
+        ax2.plot(pf_valuations_lower_percentile.keys(), pf_valuations_lower_percentile.values(),
+                 label=f"{lower_percentile} % percentile")
         ax2.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
         ax2.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-
+        plt.legend()
 
         plt.show()
 
@@ -400,44 +401,47 @@ class Simulation:
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.expand_frame_repr', False)
 
-    # investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
-    #                     living_expenses=3000,
-    #                     target_investment_amount=4000.0,
-    #                     investment_cap=False,
-    #                     tax_rate=0.05,
-    #                     current_portfolio_value=200000)
-    investor = Investor("Me", "Lady", datetime.date(1984, 1, 22),
-                        living_expenses=1500,
-                        target_investment_amount=500.0,
+    number_of_simulations = 1
+    overall_runs = 2
+
+    investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
+                        living_expenses=3000,
+                        target_investment_amount=4500.0,
                         investment_cap=True,
                         tax_rate=0.05,
-                        current_portfolio_value=13000)
-    simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
-                            ending_date=datetime.date(2084, 12, 12),
-                            investor=investor,
-                            inflation=0.03,
-                            return_generator=returngens.GBM(
-                                yearly_return=0.08,
-                                yearly_vola=0.15))
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
-    #                                    ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2023, 1, 29)),
-                                       ending_date=datetime.date(2051, 12, 9), perc_increase_per_year=0.04)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
-    #                                    ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(2000, datetime.date(2042, 1, 29)),
-    #                                    ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
-    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(1000, datetime.date(2051, 12, 9)),
-                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1000, datetime.date(2051, 1, 29)),
-    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
+                        current_portfolio_value=200000)
+    overall_results = dict()
+    for i in reversed(range(overall_runs)):
+        yearly_return = i / 100
+        yearly_vola = i * 2.5 / 100
+        simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
+                                ending_date=datetime.date(2084, 1, 22),
+                                investor=investor,
+                                inflation=0.03,
+                                return_generator=returngens.GBM(
+                                    yearly_return=yearly_return,
+                                    yearly_vola=yearly_vola))
 
-    # simulation.create_df_of_investments_and_disinvestments()
-    # df = simulation.create_portfolio_valuations()
-    simulation.run_simulation(n=2)
-    pprint(simulation.analyze_results())
-    simulation.plot_results()
+        simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
+                                           ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
+        simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
+                                           ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+        simulation.add_recurring_cashflows(cashflow=cashflows.Income(2500, datetime.date(2042, 1, 29)),
+                                           ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
+        simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2200, datetime.date(2051, 1, 29)),
+                                           ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+        simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1200, datetime.date(2051, 1, 29)),
+                                           ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+        simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
+
+        simulation.run_simulation(n=number_of_simulations)
+        # pprint(simulation.analyze_results())
+        simulation.plot_results()
+
+        overall_results[i] = [simulation.analyze_results(), yearly_return, yearly_vola, number_of_simulations]
+
+    pprint(overall_results)
+    # todo: inheritance is still capped by investment cap which shouldn't be the case
