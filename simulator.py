@@ -448,22 +448,22 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     pd.set_option('display.expand_frame_repr', False)
-
-    print(return_simulator(monthly_investment=4500,
-                           expected_rate_of_return=0.07,
-                           yearly_increase_of_monthly_investment=0.05,
-                           months_to_simulate=120,
-                           initial_pf_value=200000,
-                           inflation=0.03,
-                           plot=True))
-
-    print(return_simulator(monthly_investment=20,
-                           expected_rate_of_return=0.0849,
-                           yearly_increase_of_monthly_investment=0.0,
-                           months_to_simulate=600,
-                           initial_pf_value=0,
-                           inflation=0.03,
-                           plot=True))
+    #
+    # print(return_simulator(monthly_investment=4500,
+    #                        expected_rate_of_return=0.07,
+    #                        yearly_increase_of_monthly_investment=0.05,
+    #                        months_to_simulate=120,
+    #                        initial_pf_value=200000,
+    #                        inflation=0.03,
+    #                        plot=True))
+    #
+    # print(return_simulator(monthly_investment=20,
+    #                        expected_rate_of_return=0.0849,
+    #                        yearly_increase_of_monthly_investment=0.0,
+    #                        months_to_simulate=600,
+    #                        initial_pf_value=0,
+    #                        inflation=0.03,
+    #                        plot=True))
     #
     # print(return_simulator(monthly_investment=20,
     #                        expected_rate_of_return=0.08,
@@ -481,39 +481,39 @@ if __name__ == '__main__':
     #                        inflation=0.03,
     #                        plot=True))
     #
-    # yearly_return = 0.08
-    # yearly_vola = 0.18
-    # number_of_simulations = 200
-    #
-    # investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
-    #                     living_expenses=3000,
-    #                     target_investment_amount=4500.0,
-    #                     investment_cap=True,
-    #                     tax_rate=0.05,
-    #                     current_portfolio_value=200000)
-    #
-    # simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
-    #                         ending_date=datetime.date(2074, 1, 22),
-    #                         investor=investor,
-    #                         inflation=0.03,
-    #                         return_generator=returngens.GBM(
-    #                             yearly_return=yearly_return,
-    #                             yearly_vola=yearly_vola))
-    #
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
-    #                                    ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
-    #                                    ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(2500, datetime.date(2042, 1, 29)),
-    #                                    ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
-    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    # simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1200, datetime.date(2051, 1, 29)),
-    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-    # simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
-    #
-    # simulation.run_simulation(n=number_of_simulations)
-    # pprint(simulation.analyze_results())
-    # simulation.plot_results()
+    yearly_return = 0.08
+    yearly_vola = 0.18
+    number_of_simulations = 500
+
+    investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
+                        living_expenses=3000,
+                        target_investment_amount=4500.0,
+                        investment_cap=True,
+                        tax_rate=0.05,
+                        current_portfolio_value=200000)
+
+    simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
+                            ending_date=datetime.date(2084, 1, 22),
+                            investor=investor,
+                            inflation=0.03,
+                            return_generator=returngens.GBM(
+                                yearly_return=yearly_return,
+                                yearly_vola=yearly_vola))
+
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
+                                       ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
+                                       ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Income(2500, datetime.date(2042, 1, 29)),
+                                       ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
+    simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
+                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1200, datetime.date(2051, 1, 29)),
+                                       ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
+
+    simulation.run_simulation(n=number_of_simulations)
+    pprint(simulation.analyze_results())
+    simulation.plot_results()
 
     # todo: inheritance is still capped by investment cap which shouldn't be the case
