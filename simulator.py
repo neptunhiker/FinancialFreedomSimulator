@@ -5,10 +5,11 @@ import datetime
 
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import cashflows
 import returngens
@@ -399,49 +400,120 @@ class Simulation:
         return results
 
 
+def return_simulator(monthly_investment: int = 4000, yearly_increase_of_monthly_investment: float = 0.02,
+                     months_to_simulate: int = 120, expected_rate_of_return: float = 0.08,
+                     initial_pf_value: int = 200000, plot: bool = False, inflation: float = 0.03) -> Tuple[int, int]:
+    """
+    Simulate the return path of a monthly investment with a given expected rate of return
+    """
+
+    df = pd.DataFrame(index=range(0, months_to_simulate + 1))
+    for i in range(0, months_to_simulate + 1):
+        if i == 0:
+            df.loc[i, "PF value nominal"] = initial_pf_value
+            df.loc[i, "PF value real"] = initial_pf_value
+        else:
+            df.loc[i, "PF value nominal"] = int(df.loc[i - 1, "PF value nominal"] * (1 + expected_rate_of_return / 12) + \
+                                        monthly_investment * (1 + yearly_increase_of_monthly_investment / 12) ** (
+                                                    i - 1))
+            df.loc[i, "PF value real"] = df.loc[i, "PF value nominal"] / (1 + inflation / 12) ** (i - 1)
+
+    if plot:
+        fig, ax = plt.subplots(figsize=(10,6))
+        ax.plot(df["PF value nominal"], label="PF value nominal")
+        ax.plot(df["PF value real"], label="PF value real")
+        fig.suptitle(f"Portfolio simulator based on monthly investments of {monthly_investment} EUR increasing "
+                     f"by {yearly_increase_of_monthly_investment*100} % per year\nsimulated over "
+                     f"{months_to_simulate} months "
+                     f"({round(months_to_simulate/12, 1)} years) with an inflation of {round(inflation * 100, 1)} %\n"
+                     f"and an expected rate of return of {round(expected_rate_of_return*100, 1)} % per year. Initial "
+                     f"PF value: {format(initial_pf_value, ',')} EUR.")
+        plt.xlabel("Months")
+        plt.ylabel("PF value")
+        ax.grid()
+        ax.ticklabel_format(useOffset=False, style='plain')
+        ax.get_yaxis().set_major_formatter(
+            matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+        plt.legend()
+        fig.tight_layout()
+        plt.show()
+
+    nominal_final_value = int(df.iloc[-1]["PF value nominal"])
+    real_final_value = int(nominal_final_value / (1 + inflation) ** (months_to_simulate / 12))
+
+    return nominal_final_value, real_final_value
+
+
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     pd.set_option('display.expand_frame_repr', False)
 
-    number_of_simulations = 1
-    overall_runs = 2
+    print(return_simulator(monthly_investment=4500,
+                           expected_rate_of_return=0.07,
+                           yearly_increase_of_monthly_investment=0.05,
+                           months_to_simulate=120,
+                           initial_pf_value=200000,
+                           inflation=0.03,
+                           plot=True))
 
-    investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
-                        living_expenses=3000,
-                        target_investment_amount=4500.0,
-                        investment_cap=True,
-                        tax_rate=0.05,
-                        current_portfolio_value=200000)
-    overall_results = dict()
-    for i in reversed(range(overall_runs)):
-        yearly_return = i / 100
-        yearly_vola = i * 2.5 / 100
-        simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
-                                ending_date=datetime.date(2084, 1, 22),
-                                investor=investor,
-                                inflation=0.03,
-                                return_generator=returngens.GBM(
-                                    yearly_return=yearly_return,
-                                    yearly_vola=yearly_vola))
+    print(return_simulator(monthly_investment=20,
+                           expected_rate_of_return=0.0849,
+                           yearly_increase_of_monthly_investment=0.0,
+                           months_to_simulate=600,
+                           initial_pf_value=0,
+                           inflation=0.03,
+                           plot=True))
+    #
+    # print(return_simulator(monthly_investment=20,
+    #                        expected_rate_of_return=0.08,
+    #                        yearly_increase_of_monthly_investment=0.0,
+    #                        months_to_simulate=144,
+    #                        initial_pf_value=1440,
+    #                        inflation=0.03,
+    #                        plot=True))
+    #
+    # print(return_simulator(monthly_investment=2500,
+    #                        expected_rate_of_return=0.08,
+    #                        yearly_increase_of_monthly_investment=0.04,
+    #                        months_to_simulate=120,
+    #                        initial_pf_value=200000,
+    #                        inflation=0.03,
+    #                        plot=True))
+    #
+    # yearly_return = 0.08
+    # yearly_vola = 0.18
+    # number_of_simulations = 200
+    #
+    # investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
+    #                     living_expenses=3000,
+    #                     target_investment_amount=4500.0,
+    #                     investment_cap=True,
+    #                     tax_rate=0.05,
+    #                     current_portfolio_value=200000)
+    #
+    # simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
+    #                         ending_date=datetime.date(2074, 1, 22),
+    #                         investor=investor,
+    #                         inflation=0.03,
+    #                         return_generator=returngens.GBM(
+    #                             yearly_return=yearly_return,
+    #                             yearly_vola=yearly_vola))
+    #
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
+    #                                    ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
+    #                                    ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Income(2500, datetime.date(2042, 1, 29)),
+    #                                    ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2500, datetime.date(2051, 1, 29)),
+    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    # simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1200, datetime.date(2051, 1, 29)),
+    #                                    ending_date=simulation.ending_date, perc_increase_per_year=0.02)
+    # simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
+    #
+    # simulation.run_simulation(n=number_of_simulations)
+    # pprint(simulation.analyze_results())
+    # simulation.plot_results()
 
-        simulation.add_recurring_cashflows(cashflow=cashflows.Income(8000, datetime.date(2023, 1, 29)),
-                                           ending_date=datetime.date(2033, 1, 23), perc_increase_per_year=0.04)
-        simulation.add_recurring_cashflows(cashflow=cashflows.Income(3000, datetime.date(2035, 1, 29)),
-                                           ending_date=datetime.date(2040, 1, 23), perc_increase_per_year=0.01)
-        simulation.add_recurring_cashflows(cashflow=cashflows.Income(2500, datetime.date(2042, 1, 29)),
-                                           ending_date=datetime.date(2048, 1, 23), perc_increase_per_year=0.01)
-        simulation.add_recurring_cashflows(cashflow=cashflows.Retirement(2200, datetime.date(2051, 1, 29)),
-                                           ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-        simulation.add_recurring_cashflows(cashflow=cashflows.PrivatePension(1200, datetime.date(2051, 1, 29)),
-                                           ending_date=simulation.ending_date, perc_increase_per_year=0.02)
-        simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
-
-        simulation.run_simulation(n=number_of_simulations)
-        # pprint(simulation.analyze_results())
-        simulation.plot_results()
-
-        overall_results[i] = [simulation.analyze_results(), yearly_return, yearly_vola, number_of_simulations]
-
-    pprint(overall_results)
     # todo: inheritance is still capped by investment cap which shouldn't be the case
