@@ -5,6 +5,7 @@ from typing import Tuple
 
 
 # todo: return not only shares to be sold and historical prices but also the sale price when selling shares
+# todo: incude a tax exemption amount into the tax calculation methods
 
 def calculate_taxes(sale_price: float, historical_price: float, number_of_shares: float,
                     tax_rate: float = 0.26375) -> Tuple[float, float]:
