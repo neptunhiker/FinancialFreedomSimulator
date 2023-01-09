@@ -47,6 +47,7 @@ class TestSelling(unittest.TestCase):
                                                     partial_sale=True)
         self.assertEqual(exp_transactions, calc_transactions)
 
+
 class TestCapitalGainsTaxes(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -58,6 +59,26 @@ class TestCapitalGainsTaxes(unittest.TestCase):
         expected_taxes = (taxes_abs, taxes_rel)
         calculated_taxes = tax_estimator.calculate_taxes(sale_price=120, historical_price=100, number_of_shares=2)
         self.assertEqual(expected_taxes, calculated_taxes)
+
+    def test_positive_taxes_with_low_tax_exemption(self):
+        taxes_abs = 1  # (gain - tax_exemption) * tax_rate = (40 - 30) * 0.1
+        taxes_rel = 0.004166666666666667
+        expected_taxes = (taxes_abs, taxes_rel)
+        calculated_taxes = tax_estimator.calculate_taxes(sale_price=120, historical_price=100, number_of_shares=2,
+                                                         tax_rate=0.1, tax_exemption=30)
+        self.assertEqual(expected_taxes, calculated_taxes)
+
+    def test_positive_taxes_with_high_tax_exemption(self):
+        taxes_abs = 0
+        taxes_rel = 0
+        expected_taxes = (taxes_abs, taxes_rel)
+        calculated_taxes = tax_estimator.calculate_taxes(sale_price=120, historical_price=100, number_of_shares=2,
+                                                         tax_rate=0.1, tax_exemption=801)
+        self.assertEqual(expected_taxes, calculated_taxes)
+
+    def test_positive_taxes_with_negative_tax_exemption(self):
+        self.assertRaises(ValueError, tax_estimator.calculate_taxes, sale_price=120, historical_price=100,
+                          number_of_shares=2, tax_exemption=-100)
 
     def test_negative_taxes(self):
         taxes_abs = 0

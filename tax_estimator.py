@@ -5,23 +5,26 @@ from typing import Tuple
 
 
 # todo: return not only shares to be sold and historical prices but also the sale price when selling shares
-# todo: incude a tax exemption amount into the tax calculation methods
+# todo: include a tax exemption amount into the tax calculation methods
 
 def calculate_taxes(sale_price: float, historical_price: float, number_of_shares: float,
-                    tax_rate: float = 0.26375) -> Tuple[float, float]:
+                    tax_rate: float = 0.26375, tax_exemption: float = 0) -> Tuple[float, float]:
     """
     Calculate taxes on a sale of shares
     :param sale_price: price at which the shares are sold
     :param historical_price: price at which the shares were bought
     :param number_of_shares: nr of shares to be sold
     :param tax_rate: tax rate at which the gain will be taxed
+    :param tax_exemption: only gains beyond the tax exemption amount are taxed
     :return: list of absolute taxes and taxes in relation to the transaction volume
     """
+    if tax_exemption < 0:
+        raise ValueError("A tax exemption amount may not be negative.")
     gain = (sale_price - historical_price) * number_of_shares
-    if gain < 0:
+    if gain < 0 or gain <= tax_exemption:
         return 0, 0
     else:
-        taxes_abs = gain * tax_rate
+        taxes_abs = (gain - tax_exemption) * tax_rate
         taxes_rel = taxes_abs / (sale_price * number_of_shares)
         return taxes_abs, taxes_rel
 
