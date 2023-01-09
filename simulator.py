@@ -325,6 +325,51 @@ class Simulation:
 
         return df
 
+    def new_simulation(self):
+
+        columns = ["PF beg", "Cash inflow", "Living expenses", "Investments", "Disinvestments",
+                   "Log return", "Share price", "PF end"]
+        dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
+        starting_date = min(dates)
+        df = pd.DataFrame(columns=columns, index=dates)
+        df_net_cashflows = self._create_net_cashflows()
+
+        month = 0
+        for index, row in df.iterrows():
+            inflation_multiplier = (1 + self.inflation / 12) ** month
+            target_investment = self.investor.target_investment_amount * inflation_multiplier
+            cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
+            living_expenses = self.investor.living_expenses * inflation_multiplier
+            log_return = self.return_generator.generate_monthly_returns(n=1)[0]
+            df.loc[index, "Cash inflow"] = cash_inflow
+            df.loc[index, "Log return"] = log_return
+            df.loc[index, "Living expenses"] = living_expenses
+            investments = determine_investment(cash_inflow=cash_inflow,
+                                               living_expenses=df.loc[index, "Living expenses"],
+                                               target_investment=target_investment,
+                                               investment_cap=self.investor.investment_cap)
+            disinvestments = determine_disinvestment(cash_inflow=cash_inflow,
+                                                     living_expenses=living_expenses,
+                                                     tax_rate=self.investor.tax_rate)
+            df.loc[index, "Investments"] = investments
+            df.loc[index, "Disinvestments"] = disinvestments
+
+            if index == starting_date:
+                pf_beg = self.investor.current_portfolio_value
+                share_price = 100
+            else:
+                pf_beg = df.loc[prev_index, "PF end"]
+                share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
+
+            df.loc[index, "PF beg"] = pf_beg
+            df.loc[index, "Share price"] = share_price
+            df.loc[index, "PF end"] = pf_beg * math.exp(log_return) + investments - disinvestments
+
+            prev_index = index
+            month += 1
+
+        pprint(df)
+
     def run_simulation(self, n: int = 10) -> None:
         """
         Run the simulation
@@ -414,19 +459,20 @@ def return_simulator(monthly_investment: int = 4000, yearly_increase_of_monthly_
             df.loc[i, "PF value real"] = initial_pf_value
         else:
             df.loc[i, "PF value nominal"] = int(df.loc[i - 1, "PF value nominal"] * (1 + expected_rate_of_return / 12) + \
-                                        monthly_investment * (1 + yearly_increase_of_monthly_investment / 12) ** (
-                                                    i - 1))
+                                                monthly_investment * (
+                                                            1 + yearly_increase_of_monthly_investment / 12) ** (
+                                                        i - 1))
             df.loc[i, "PF value real"] = df.loc[i, "PF value nominal"] / (1 + inflation / 12) ** (i - 1)
 
     if plot:
-        fig, ax = plt.subplots(figsize=(10,6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(df["PF value nominal"], label="PF value nominal")
         ax.plot(df["PF value real"], label="PF value real")
         fig.suptitle(f"Portfolio simulator based on monthly investments of {monthly_investment} EUR increasing "
-                     f"by {yearly_increase_of_monthly_investment*100} % per year\nsimulated over "
+                     f"by {yearly_increase_of_monthly_investment * 100} % per year\nsimulated over "
                      f"{months_to_simulate} months "
-                     f"({round(months_to_simulate/12, 1)} years) with an inflation of {round(inflation * 100, 1)} %\n"
-                     f"and an expected rate of return of {round(expected_rate_of_return*100, 1)} % per year. Initial "
+                     f"({round(months_to_simulate / 12, 1)} years) with an inflation of {round(inflation * 100, 1)} %\n"
+                     f"and an expected rate of return of {round(expected_rate_of_return * 100, 1)} % per year. Initial "
                      f"PF value: {format(initial_pf_value, ',')} EUR.")
         plt.xlabel("Months")
         plt.ylabel("PF value")
@@ -512,8 +558,9 @@ if __name__ == '__main__':
                                        ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
 
-    simulation.run_simulation(n=number_of_simulations)
-    pprint(simulation.analyze_results())
-    simulation.plot_results()
+    simulation.new_simulation()
+    # simulation.run_simulation(n=number_of_simulations)
+    # pprint(simulation.analyze_results())
+    # simulation.plot_results()
 
     # todo: inheritance is still capped by investment cap which shouldn't be the case

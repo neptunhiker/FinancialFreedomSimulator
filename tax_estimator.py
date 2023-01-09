@@ -4,7 +4,6 @@ from pprint import pprint
 from typing import Tuple
 
 
-
 def calculate_taxes(sale_price: float, historical_price: float, number_of_shares: float,
                     tax_rate: float = 0.26375, tax_exemption: float = 0) -> Tuple[float, float]:
     """
@@ -53,7 +52,7 @@ class Portfolio:
         """
         sale_transactions = OrderedDict()
         net_proceeds = 0
-        fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are not sufficient
+        fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
         while net_proceeds < target_net_proceeds:
             try:
                 next_transaction_id = next(iter(self.fifo))
