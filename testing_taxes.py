@@ -13,24 +13,27 @@ class TestSelling(unittest.TestCase):
         self.pf.buy_shares(nr_shares=10, historical_price=100)
 
     def test_selling_shares(self):
+        sale_price = 100
         exp_transactions = OrderedDict()
-        exp_transactions[50] = 100
-        exp_transactions[20] = 120
-        calc_transactions = self.pf.sell_shares(nr_shares=70)
+        exp_transactions[50] = [100, sale_price]
+        exp_transactions[20] = [120, sale_price]
+        calc_transactions = self.pf.sell_shares(nr_shares=70, sale_price=sale_price)
         self.assertEqual(exp_transactions, calc_transactions)
 
     def test_selling_gross_volume(self):
+        sale_price = 150
         exp_transactions = OrderedDict()
-        exp_transactions[50] = 100
-        exp_transactions[20] = 120
-        calc_transactions = self.pf.sell_gross_volume(gross_proceeds=10500, sale_price=150)
+        exp_transactions[50] = [100, sale_price]
+        exp_transactions[20] = [120, sale_price]
+        calc_transactions = self.pf.sell_gross_volume(gross_proceeds=10500, sale_price=sale_price)
         self.assertEqual(exp_transactions, calc_transactions)
 
     def test_selling_net_volume(self):
+        sale_price = 150
         exp_transactions = OrderedDict()
-        exp_transactions[50] = 100
-        exp_transactions[18.707482993197278] = 120
-        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=10000, sale_price=150, tax_rate=0.1)
+        exp_transactions[50] = [100, sale_price]
+        exp_transactions[18.707482993197278] = [120, sale_price]
+        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=10000, sale_price=sale_price, tax_rate=0.1)
         self.assertEqual(exp_transactions, calc_transactions)
 
     def test_selling_net_volume_insufficient_without_partial_sale(self):
@@ -39,11 +42,12 @@ class TestSelling(unittest.TestCase):
         self.assertEqual(pf_before, self.pf.fifo)
 
     def test_selling_net_volume_insufficient_with_partial_sale(self):
+        sale_price = 150
         exp_transactions = OrderedDict()
-        exp_transactions[50] = 100
-        exp_transactions[30] = 120
-        exp_transactions[10] = 100
-        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=150, tax_rate=0.1,
+        exp_transactions[50] = [100, sale_price]
+        exp_transactions[30] = [120, sale_price]
+        exp_transactions[10] = [100, sale_price]
+        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=sale_price, tax_rate=0.1,
                                                     partial_sale=True)
         self.assertEqual(exp_transactions, calc_transactions)
 

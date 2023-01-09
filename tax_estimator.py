@@ -4,8 +4,6 @@ from pprint import pprint
 from typing import Tuple
 
 
-# todo: return not only shares to be sold and historical prices but also the sale price when selling shares
-# todo: include a tax exemption amount into the tax calculation methods
 
 def calculate_taxes(sale_price: float, historical_price: float, number_of_shares: float,
                     tax_rate: float = 0.26375, tax_exemption: float = 0) -> Tuple[float, float]:
@@ -70,20 +68,20 @@ class Portfolio:
                                                                sale_price=sale_price, historical_price=historical_price,
                                                                tax_rate=tax_rate)[1]
                     transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
-                    shares_to_be_sold, historical_price = next(iter(transactions.items()))
+                    shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
                     taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
                                             number_of_shares=shares_to_be_sold, tax_rate=tax_rate)[0]
                     gross_proceeds = shares_to_be_sold * sale_price
                     net_proceeds += gross_proceeds - taxes
-                    sale_transactions[shares_to_be_sold] = historical_price
+                    sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
 
                 else:
-                    self.sell_shares(nr_shares=next_available_nr_shares)
+                    self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
                     taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
                                             number_of_shares=next_available_nr_shares, tax_rate=tax_rate)[0]
                     gross_proceeds = next_available_nr_shares * sale_price
                     net_proceeds += gross_proceeds - taxes
-                    sale_transactions[next_available_nr_shares] = historical_price
+                    sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
             except StopIteration as err:
                 print(err)
                 if partial_sale:
@@ -104,12 +102,13 @@ class Portfolio:
         return: Ordered dictionary of shares to be sold (key) and their respective historical price (value)
         """
         shares_to_be_sold = gross_proceeds / sale_price
-        return self.sell_shares(nr_shares=shares_to_be_sold)
+        return self.sell_shares(nr_shares=shares_to_be_sold, sale_price=sale_price)
 
-    def sell_shares(self, nr_shares: float) -> OrderedDict:
+    def sell_shares(self, nr_shares: float, sale_price: float) -> OrderedDict:
         """
         Sell a certain number of shares from the portfolio (FIFO procedure)
         :param nr_shares: the number of shares to be sold
+        :param sale_price: the price at which the shares are sold
         :return: Ordered dictionary of shares to be sold (key) and their respective historical price (value)
         """
         shares_sold = 0
@@ -125,7 +124,7 @@ class Portfolio:
             else:
                 shares_to_be_sold, historical_price = self.fifo.popitem(last=False)[1]
                 shares_sold += shares_to_be_sold
-            transactions[shares_to_be_sold] = historical_price
+            transactions[shares_to_be_sold] = [historical_price, sale_price]
 
         return transactions
 
