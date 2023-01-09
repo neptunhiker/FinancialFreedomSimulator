@@ -2,6 +2,7 @@ import calendar
 import math
 from dataclasses import dataclass
 import datetime
+import dateutil.relativedelta
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -47,20 +48,32 @@ def determine_survival(series: pd.Series) -> bool:
     return (series >= 0).all()
 
 
-def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float) -> float:
+def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float,
+                            safety_buffer: bool = False,
+                            months_to_simulate: int = None,
+                            pf_value: float = None) -> float:
     """
     Determine a disinvestment amount
 
-    cash_inflow: float - the net cash inflow from income, retirement, private pension etc. for that month
-    living_expenses: float - the living expenses for that month
-    tax_rate: float - the rate at which the disinvestment is assumed to be taxed
+    :param cash_inflow: the net cash inflow from income, retirement, private pension etc. for that month
+    :param living_expenses: the living expenses for that month
+    :param tax_rate: the rate at which the disinvestment is assumed to be taxed
+    :param safety_buffer: if true then the disinvestment is capped linearly based on pf value and months to simulate
+    :param months_to_simulate: number of months left to simulate, ignored if safety_buffer is False
+    :param pf_value: value of the portfolio, ignored if safety_buffer is False
+    :return float of disinvestment amount
     """
     if tax_rate >= 1:
         raise ValueError("The tax rate is too high (i.e. greater or equal to 100%.")
     elif tax_rate < 0:
         raise ValueError("The tax rate is too low (i.e. lower than 0%).")
 
-    return max((living_expenses - cash_inflow) / (1 - tax_rate), 0)
+    unconstrained_disinvestment = max((living_expenses - cash_inflow) / (1 - tax_rate), 0)
+    if safety_buffer:
+        linear_threshold = pf_value / months_to_simulate
+        return min(linear_threshold, unconstrained_disinvestment)
+    else:
+        return unconstrained_disinvestment
 
 
 def determine_investment(cash_inflow: float, living_expenses: float, target_investment: float,
@@ -116,6 +129,7 @@ class Investor:
     investment_cap: bool = True
     tax_rate: float = 0.05
     current_portfolio_value: float = 200000
+    safety_buffer: bool = False
 
     @property
     def name(self):
@@ -330,7 +344,10 @@ class Simulation:
         columns = ["PF beg", "Cash inflow", "Living expenses", "Investments", "Disinvestments",
                    "Log return", "Share price", "PF end"]
         dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
-        starting_date = min(dates)
+        starting_date = min(dates).date()
+        ending_date = max(dates).date()
+        rel_delta = dateutil.relativedelta.relativedelta(ending_date, starting_date)
+        months_to_simulate = rel_delta.months + rel_delta.years * 12
         df = pd.DataFrame(columns=columns, index=dates)
         df_net_cashflows = self._create_net_cashflows()
 
@@ -341,6 +358,14 @@ class Simulation:
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
             living_expenses = self.investor.living_expenses * inflation_multiplier
             log_return = self.return_generator.generate_monthly_returns(n=1)[0]
+
+            if index == starting_date:
+                pf_beg = self.investor.current_portfolio_value
+                share_price = 100
+            else:
+                pf_beg = df.loc[prev_index, "PF end"]
+                share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
+
             df.loc[index, "Cash inflow"] = cash_inflow
             df.loc[index, "Log return"] = log_return
             df.loc[index, "Living expenses"] = living_expenses
@@ -350,16 +375,12 @@ class Simulation:
                                                investment_cap=self.investor.investment_cap)
             disinvestments = determine_disinvestment(cash_inflow=cash_inflow,
                                                      living_expenses=living_expenses,
-                                                     tax_rate=self.investor.tax_rate)
+                                                     tax_rate=self.investor.tax_rate,
+                                                     safety_buffer=self.investor.safety_buffer,
+                                                     months_to_simulate=months_to_simulate,
+                                                     pf_value=pf_beg)
             df.loc[index, "Investments"] = investments
             df.loc[index, "Disinvestments"] = disinvestments
-
-            if index == starting_date:
-                pf_beg = self.investor.current_portfolio_value
-                share_price = 100
-            else:
-                pf_beg = df.loc[prev_index, "PF end"]
-                share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
 
             df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Share price"] = share_price
@@ -367,8 +388,13 @@ class Simulation:
 
             prev_index = index
             month += 1
+            months_to_simulate -= 1
 
         pprint(df)
+
+        # todo: write function for storing the data in self.results, e.g. similar to create_portfolio valuations
+        # todo: write a better disinvestment function that determines net investments based on FIFO portfolios
+        # for that we also need to write an investment function that puts the securities into a FIFO container
 
     def run_simulation(self, n: int = 10) -> None:
         """
@@ -536,7 +562,8 @@ if __name__ == '__main__':
                         target_investment_amount=4500.0,
                         investment_cap=True,
                         tax_rate=0.05,
-                        current_portfolio_value=200000)
+                        current_portfolio_value=200000,
+                        safety_buffer=True)
 
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
                             ending_date=datetime.date(2084, 1, 22),

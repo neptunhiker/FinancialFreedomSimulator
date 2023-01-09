@@ -58,6 +58,36 @@ class TestHelperFunctions(unittest.TestCase):
         tax_rate = -0.3
         self.assertRaises(ValueError, simulator.determine_disinvestment, cash_inflow, living_expenses, tax_rate)
 
+    def test_determine_disinvestment_medium_living_expenses_with_linear_buffer(self):
+        cash_inflow = 3000
+        living_expenses = 5000
+        tax_rate = 0.1
+        expected_disinvestment = 2222.222222222222
+        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
+                                                                     safety_buffer=True, months_to_simulate=20,
+                                                                     pf_value=200000)
+        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
+
+    def test_determine_disinvestment_high_living_expenses_with_linear_buffer(self):
+        cash_inflow = 3000
+        living_expenses = 9999999
+        tax_rate = 0.1
+        expected_disinvestment = 10000
+        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
+                                                                     safety_buffer=True, months_to_simulate=20,
+                                                                     pf_value=200000)
+        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
+
+    def test_determine_disinvestment_high_income_with_linear_buffer(self):
+        cash_inflow = 8000
+        living_expenses = 1000
+        tax_rate = 0.1
+        expected_disinvestment = 0
+        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
+                                                                     safety_buffer=True, months_to_simulate=20,
+                                                                     pf_value=200000)
+        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
+
     def test_determine_investment_high_income(self):
         cash_inflow = 10000
         living_expenses = 3600
