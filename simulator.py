@@ -350,7 +350,8 @@ class Simulation:
 
     def new_simulation(self):
 
-        columns = ["PF beg", "Cash inflow", "Living expenses", "Investments", "Disinvestments",
+        columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Investments", "Disinvestments",
+                   "Taxes", "Net proceeds",
                    "Log return", "Share price", "PF end"]
         dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
         starting_date = min(dates).date()
@@ -366,6 +367,7 @@ class Simulation:
             target_investment = self.investor.target_investment_amount * inflation_multiplier
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
             living_expenses = self.investor.living_expenses * inflation_multiplier
+            cash_need = determine_cash_need(cash_inflow, living_expenses)
             log_return = self.return_generator.generate_monthly_returns(n=1)[0]
 
             if index == starting_date:
@@ -378,6 +380,7 @@ class Simulation:
             df.loc[index, "Cash inflow"] = cash_inflow
             df.loc[index, "Log return"] = log_return
             df.loc[index, "Living expenses"] = living_expenses
+            df.loc[index, "Cash need"] = cash_need
             investments = determine_investment(cash_inflow=cash_inflow,
                                                living_expenses=df.loc[index, "Living expenses"],
                                                target_investment=target_investment,
@@ -388,8 +391,16 @@ class Simulation:
                                                      safety_buffer=self.investor.safety_buffer,
                                                      months_to_simulate=months_to_simulate,
                                                      pf_value=pf_beg)
+            taxes = 100
+            net_proceeds = disinvestments - taxes
             df.loc[index, "Investments"] = investments
             df.loc[index, "Disinvestments"] = disinvestments
+            df.loc[index, "Taxes"] = taxes
+            df.loc[index, "Net proceeds"] = net_proceeds
+            try:
+                df.loc[index, "Cash need fulfillment"] = net_proceeds / cash_need
+            except ZeroDivisionError as err:
+                df.loc[index, "Cash need fulfillment"] = 1.0
 
             df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Share price"] = share_price
