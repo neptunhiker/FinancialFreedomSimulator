@@ -48,12 +48,12 @@ class Portfolio:
         :param tax_rate: the tax rate at which gains are taxed
         :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
             the target net
-        :return: Ordered dictionary of shares to be sold (key) and their respective historical price (value)
+        :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
         """
         sale_transactions = OrderedDict()
         net_proceeds = 0
         fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
-        while net_proceeds < target_net_proceeds:
+        while round(net_proceeds, 2) < round(target_net_proceeds, 2):
             try:
                 next_transaction_id = next(iter(self.fifo))
                 next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
@@ -135,20 +135,35 @@ def taxes_for_transactions(transactions: OrderedDict, share_price) -> Tuple[floa
     """
     Calculate taxes for a list of transactions
     :param transactions: Ordered dictionary of transactions containing shares to be sold (key) and their
-        historical prices (value)
+        historical prices and sale prices (values)
     :param share_price: the price at which the shares were sold
     :return: tuple of absolute taxes and relative taxes in relation to the transaction volume
     """
     transaction_volume = 0
     taxes_abs = 0
-    for shares_sold, historical_price in transactions.items():
-        transaction_volume += shares_sold * share_price
-        taxes_abs += calculate_taxes(sale_price=share_price, historical_price=historical_price,
-                                     number_of_shares=shares_sold, tax_rate=0.26375)[0]
+    for key, value in transactions.items():
+        transaction_volume += key * share_price
+        taxes_abs += calculate_taxes(sale_price=share_price, historical_price=value[0],
+                                     number_of_shares=key, tax_rate=0.26375)[0]
 
-    taxes_rel = taxes_abs / transaction_volume
-    # return 2, 1
+    try:
+        taxes_rel = taxes_abs / transaction_volume
+    except ZeroDivisionError as err:
+        taxes_rel = 0
+
     return taxes_abs, taxes_rel
+
+
+def determine_gross_transaction_volume(transactions: OrderedDict) -> float:
+    """
+    Determine the gross volume based on an Ordered dict of sale transactions
+    :param transactions: Ordered dict of shares to be sold (key) and respective historical price and sale price (value)
+    :return: gross volume
+    """
+    gross_volume = 0
+    for key, value in transactions.items():
+        gross_volume += key * value[1]
+    return gross_volume
 
 
 def determine_gross_sale(target_net_proceeds: float, sale_price: float, historical_price: float,

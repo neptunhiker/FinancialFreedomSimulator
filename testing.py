@@ -1,12 +1,14 @@
 import datetime
 import math
 import unittest
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
 
 import cashflows
 import simulator
+import tax_estimator
 
 
 class TestHelperFunctions(unittest.TestCase):
@@ -148,8 +150,11 @@ class TestSimulationAddingCashflows(unittest.TestCase):
 
     def setUp(self) -> None:
         self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23))
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2023, 12, 2),
-                                               ending_date=datetime.date(2080, 12, 30), investor=self.investor)
+                                               ending_date=datetime.date(2080, 12, 30),
+                                               investor=self.investor,
+                                               portfolio=pf)
 
     def test_adding_cashflows(self):
         cash_inflow = cashflows.Income(2000, datetime.date(2030, 12, 12))
@@ -171,9 +176,11 @@ class TestSimulationCreatingNetCashflows(unittest.TestCase):
 
     def setUp(self) -> None:
         self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23))
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2029, 12, 2),
                                                ending_date=datetime.date(2031, 3, 27),
-                                               investor=self.investor)
+                                               investor=self.investor,
+                                               portfolio=pf)
         self.simulation.add_cashflow(cashflows.Income(2000, datetime.date(2030, 1, 13)))
         self.simulation.add_cashflow(cashflows.PrivatePension(3000, datetime.date(2030, 1, 23)))
         self.simulation.add_cashflow(cashflows.Retirement(4000, datetime.date(2030, 4, 13)))
@@ -211,9 +218,11 @@ class TestSimulationLivingExpenses(unittest.TestCase):
 
     def setUp(self) -> None:
         self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23), living_expenses=10000)
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2023, 12, 2),
                                                ending_date=datetime.date(2080, 12, 30),
-                                               investor=self.investor)
+                                               investor=self.investor,
+                                               portfolio=pf)
 
     def test_living_expenses_in_the_future_valid_input(self):
         date_of_origin = datetime.date(2020, 3, 23)
@@ -259,9 +268,10 @@ class TestInvestmentDataframe(unittest.TestCase):
         self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23),
                                            living_expenses=3000,
                                            target_investment_amount=4000.0)
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
                                                ending_date=datetime.date(2080, 5, 28),
-                                               investor=self.investor)
+                                               investor=self.investor, portfolio=pf)
 
     def test_investment_dataframe(self):
         expected_df = self.df.copy()
@@ -288,9 +298,11 @@ class TestInvestmentsAndDisinvestments(unittest.TestCase):
                                            living_expenses=3000,
                                            target_investment_amount=4000.0,
                                            tax_rate=0.4)
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
                                                ending_date=datetime.date(2022, 5, 28),
                                                investor=self.investor,
+                                               portfolio=pf,
                                                inflation=0.0)
         self.simulation.add_cashflow(cashflows.Income(8000, datetime.date(2022, 1, 12)))
         self.simulation.add_cashflow(cashflows.Income(6000, datetime.date(2022, 2, 19)))
@@ -319,9 +331,11 @@ class TestAdditionalLivingExpenses(unittest.TestCase):
                                            living_expenses=1000,
                                            target_investment_amount=4000.0,
                                            tax_rate=0.0)
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
                                                ending_date=datetime.date(2022, 5, 28),
                                                investor=self.investor,
+                                               portfolio=pf,
                                                inflation=0.0)
         self.simulation.add_cashflow(cashflows.Income(8000, datetime.date(2022, 1, 12)))
         self.simulation.add_cashflow(cashflows.Income(6000, datetime.date(2022, 2, 19)))
@@ -346,9 +360,11 @@ class TestAddingRecurringCashflows(unittest.TestCase):
                                            living_expenses=1000,
                                            target_investment_amount=4000.0,
                                            tax_rate=0.0)
+        pf = tax_estimator.Portfolio()
         self.simulation = simulator.Simulation(starting_date=datetime.date(2022, 1, 22),
                                                ending_date=datetime.date(2022, 7, 28),
                                                investor=self.investor,
+                                               portfolio=pf,
                                                inflation=0.0)
         self.simulation.add_recurring_cashflows(cashflow=cashflows.Income(4000, datetime.date(2022, 1, 28)),
                                                 ending_date=datetime.date(2022, 4, 28),

@@ -97,9 +97,9 @@ class TestTaxesForTransactions(unittest.TestCase):
     def setUp(self) -> None:
         self.transactions = OrderedDict()
         self.transactions = OrderedDict()
-        self.transactions[30] = 100
-        self.transactions[50] = 120
-        self.transactions[4] = 100
+        self.transactions[30] = [100, 150]
+        self.transactions[50] = [120, 150]
+        self.transactions[4] = [100, 150]
 
     def test_transactions_high_sale_price(self) -> None:
         sale_price = 150
@@ -147,3 +147,12 @@ class TestDetermineGrossSale(unittest.TestCase):
         self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
 
 
+class TestDetermineGrossTransactionVolume(unittest.TestCase):
+
+    def test_determine_gross_transaction_volume(self):
+        sale_transactions = OrderedDict()
+        sale_transactions[20] = [100, 120]  # key = number of shares, values = historical price and sale price
+        sale_transactions[50] = [110, 90]
+        exp_gross_volume = 2400 + 4500
+        calc_gross_volume = tax_estimator.determine_gross_transaction_volume(sale_transactions)
+        self.assertEqual(exp_gross_volume, calc_gross_volume)

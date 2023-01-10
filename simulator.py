@@ -1,5 +1,6 @@
 import calendar
 import math
+import random
 from dataclasses import dataclass
 import datetime
 import dateutil.relativedelta
@@ -14,6 +15,7 @@ from typing import List, Union, Tuple
 
 import cashflows
 import returngens
+import tax_estimator
 
 
 def analyze_survival_probability(list_of_pf_valuations: List[pd.Series]) -> float:
@@ -56,6 +58,7 @@ def determine_cash_need(cash_inflow: float, living_expenses) -> float:
     :return: the amount of living expenses that cannot be covered by the cash inflow
     """
     return max(0, living_expenses - cash_inflow)
+
 
 def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float,
                             safety_buffer: bool = False,
@@ -154,12 +157,14 @@ class Portfolio:
 class Simulation:
 
     def __init__(self, starting_date: datetime.date, ending_date: datetime.date, investor: Investor,
+                 portfolio: tax_estimator.Portfolio,
                  inflation: float = 0.02, return_generator: returngens.ReturnGenerator = returngens.GBM(0.07, 0.2)):
         self.starting_date = starting_date
         self.ending_date = ending_date
         self.gross_cash_flows = pd.DataFrame(columns=["Date", "Investor age", "CF direction", "Amount", "Type"])
         self.investments_disinvestments = pd.DataFrame()
         self.investor = investor
+        self.portfolio = portfolio
         self.inflation = inflation
         self.return_generator = return_generator
         self.results = dict()
@@ -351,8 +356,8 @@ class Simulation:
     def new_simulation(self):
 
         columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Investments", "Disinvestments",
-                   "Taxes", "Net proceeds",
-                   "Log return", "Share price", "PF end"]
+                   "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end",
+                   "Log return", "Share price", "Available shares"]
         dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
         starting_date = min(dates).date()
         ending_date = max(dates).date()
@@ -368,13 +373,14 @@ class Simulation:
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
             living_expenses = self.investor.living_expenses * inflation_multiplier
             cash_need = determine_cash_need(cash_inflow, living_expenses)
-            log_return = self.return_generator.generate_monthly_returns(n=1)[0]
 
             if index == starting_date:
                 pf_beg = self.investor.current_portfolio_value
+                log_return = 0
                 share_price = 100
             else:
                 pf_beg = df.loc[prev_index, "PF end"]
+                log_return = self.return_generator.generate_monthly_returns(n=1)[0]
                 share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
 
             df.loc[index, "Cash inflow"] = cash_inflow
@@ -385,17 +391,36 @@ class Simulation:
                                                living_expenses=df.loc[index, "Living expenses"],
                                                target_investment=target_investment,
                                                investment_cap=self.investor.investment_cap)
-            disinvestments = determine_disinvestment(cash_inflow=cash_inflow,
-                                                     living_expenses=living_expenses,
-                                                     tax_rate=self.investor.tax_rate,
-                                                     safety_buffer=self.investor.safety_buffer,
-                                                     months_to_simulate=months_to_simulate,
-                                                     pf_value=pf_beg)
-            taxes = 100
-            net_proceeds = disinvestments - taxes
+            # disinvestments = determine_disinvestment(cash_inflow=cash_inflow,
+            #                                          living_expenses=living_expenses,
+            #                                          tax_rate=self.investor.tax_rate,
+            #                                          safety_buffer=self.investor.safety_buffer,
+            #                                          months_to_simulate=months_to_simulate,
+            #                                          pf_value=pf_beg)
+
+            # determine disinvestment amount
+            if cash_need > 0:
+                needed_transactions = self.portfolio.sell_net_volume(target_net_proceeds=cash_need, sale_price=share_price,
+                                                                 partial_sale=True, tax_rate=0.26375)
+                disinvestments = tax_estimator.determine_gross_transaction_volume(needed_transactions)
+                taxes_abs = tax_estimator.taxes_for_transactions(transactions=needed_transactions, share_price=share_price)[0]
+                try:
+                    taxes_rel = taxes_abs / disinvestments
+                except ZeroDivisionError as err:
+                    taxes_rel = 0
+                net_proceeds = disinvestments - taxes_abs
+            else:
+                disinvestments = 0
+                taxes_abs = 0
+                taxes_rel = 0
+                net_proceeds = 0
             df.loc[index, "Investments"] = investments
+            if investments > 0:
+                self.portfolio.buy_shares(nr_shares=investments / share_price, historical_price=share_price)
             df.loc[index, "Disinvestments"] = disinvestments
-            df.loc[index, "Taxes"] = taxes
+
+            df.loc[index, "Taxes abs."] = taxes_abs
+            df.loc[index, "Taxes rel."] = taxes_rel
             df.loc[index, "Net proceeds"] = net_proceeds
             try:
                 df.loc[index, "Cash need fulfillment"] = net_proceeds / cash_need
@@ -405,6 +430,17 @@ class Simulation:
             df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Share price"] = share_price
             df.loc[index, "PF end"] = pf_beg * math.exp(log_return) + investments - disinvestments
+
+            # todo: something is off with the pf value, the share price and the available shares
+            # todo: write a function for this
+            items = []
+            for value in (zip(*list(self.portfolio.fifo.values()))):
+                items.append(sum(value))
+            if bool(self.portfolio.fifo):  # empty dictionaries evaluate to False in Python
+                available_shares = items[0]
+            else:
+                available_shares = 0
+            df.loc[index, "Available shares"] = available_shares
 
             prev_index = index
             month += 1
@@ -506,7 +542,7 @@ def return_simulator(monthly_investment: int = 4000, yearly_increase_of_monthly_
         else:
             df.loc[i, "PF value nominal"] = int(df.loc[i - 1, "PF value nominal"] * (1 + expected_rate_of_return / 12) + \
                                                 monthly_investment * (
-                                                            1 + yearly_increase_of_monthly_investment / 12) ** (
+                                                        1 + yearly_increase_of_monthly_investment / 12) ** (
                                                         i - 1))
             df.loc[i, "PF value real"] = df.loc[i, "PF value nominal"] / (1 + inflation / 12) ** (i - 1)
 
@@ -540,6 +576,7 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     pd.set_option('display.expand_frame_repr', False)
+    random.seed(123)
     #
     # print(return_simulator(monthly_investment=4500,
     #                        expected_rate_of_return=0.07,
@@ -585,9 +622,12 @@ if __name__ == '__main__':
                         current_portfolio_value=200000,
                         safety_buffer=True)
 
+    pf = tax_estimator.Portfolio()
+
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
                             ending_date=datetime.date(2084, 1, 22),
                             investor=investor,
+                            portfolio=pf,
                             inflation=0.03,
                             return_generator=returngens.GBM(
                                 yearly_return=yearly_return,
