@@ -48,6 +48,15 @@ def determine_survival(series: pd.Series) -> bool:
     return (series >= 0).all()
 
 
+def determine_cash_need(cash_inflow: float, living_expenses) -> float:
+    """
+    Determine the cash need based on cash inflow and living expenses
+    :param cash_inflow: cash inflow
+    :param living_expenses: living expenses
+    :return: the amount of living expenses that cannot be covered by the cash inflow
+    """
+    return max(0, living_expenses - cash_inflow)
+
 def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float,
                             safety_buffer: bool = False,
                             months_to_simulate: int = None,

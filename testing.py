@@ -129,6 +129,20 @@ class TestHelperFunctions(unittest.TestCase):
         calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
         self.assertEqual(expected_investment, calculated_investment)
 
+    def test_determine_cash_need_high_income(self):
+        cash_inflow = 10000
+        living_expenses = 3000
+        exp_cash_need = 0
+        calc_cash_need = simulator.determine_cash_need(cash_inflow, living_expenses)
+        self.assertEqual(exp_cash_need, calc_cash_need)
+
+    def test_determine_cash_need_high_living_expenses(self):
+        cash_inflow = 1000
+        living_expenses = 3000
+        exp_cash_need = 2000
+        calc_cash_need = simulator.determine_cash_need(cash_inflow, living_expenses)
+        self.assertEqual(exp_cash_need, calc_cash_need)
+
 
 class TestSimulationAddingCashflows(unittest.TestCase):
 
