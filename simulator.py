@@ -140,18 +140,17 @@ class Investor:
     target_investment_amount: float = 4000.0
     investment_cap: bool = True
     tax_rate: float = 0.05
-    current_portfolio_value: float = 200000
     safety_buffer: bool = False
 
     @property
     def name(self):
         return f"{self.first_name} {self.last_name}"
 
-
-@dataclass
-class Portfolio:
-    df: pd.DataFrame
-    pf_value_initial: float
+#
+# @dataclass
+# class Portfolio:
+#     df: pd.DataFrame
+#     pf_value_initial: float
 
 
 class Simulation:
@@ -226,94 +225,94 @@ class Simulation:
 
         return grouped
 
-    def _create_living_expenses(self) -> pd.DataFrame:
-        """Create dataframe with future living expenses scaled by inflation"""
+    # def _create_living_expenses(self) -> pd.DataFrame:
+    #     """Create dataframe with future living expenses scaled by inflation"""
+    #
+    #     df = pd.DataFrame(columns=["Date", "Living expenses"])
+    #     df["Date"] = pd.date_range(self.starting_date, self.ending_date, freq="M")
+    #     df["Date"] = df["Date"].apply(lambda x: x.date())
+    #     df["Living expenses"] = df.apply(lambda x: determine_living_expenses(
+    #         self.starting_date, self.investor.living_expenses, x["Date"], self.inflation), axis=1)
+    #     df.set_index("Date", inplace=True)
+    #     return df
 
-        df = pd.DataFrame(columns=["Date", "Living expenses"])
-        df["Date"] = pd.date_range(self.starting_date, self.ending_date, freq="M")
-        df["Date"] = df["Date"].apply(lambda x: x.date())
-        df["Living expenses"] = df.apply(lambda x: determine_living_expenses(
-            self.starting_date, self.investor.living_expenses, x["Date"], self.inflation), axis=1)
-        df.set_index("Date", inplace=True)
-        return df
+    # def _create_investments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Create dataframe that includes cash inflows, living expenses and corresponding investment amounts.
+    #
+    #     df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
+    #     df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
+    #     """
+    #
+    #     # check consistency of data frames
+    #     if not df_cash_inflows.index.equals(df_living_expenses.index):
+    #         raise ValueError("Indices of data frames are not the same!")
+    #
+    #     joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
+    #     joined_df.reset_index(inplace=True)
+    #     joined_df.rename(columns={"index": "Date"}, inplace=True)
+    #     joined_df["Date"] = pd.to_datetime(joined_df["Date"])
+    #     joined_df["Investments"] = joined_df.apply(lambda x: determine_investment(
+    #         cash_inflow=x["Cashflow"],
+    #         living_expenses=x["Living expenses"],
+    #         target_investment=self.investor.target_investment_amount *
+    #                           (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25),
+    #         investment_cap=self.investor.investment_cap
+    #     ), axis=1)
+    #
+    #     joined_df.set_index(["Date"], inplace=True)
+    #     joined_df.index.freq = "M"
+    #
+    #     return joined_df
 
-    def _create_investments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
-        """
-        Create dataframe that includes cash inflows, living expenses and corresponding investment amounts.
+    # def _create_disinvestments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Create dataframe that includes cash inflows, living expenses and corresponding disinvestment amounts.
+    #
+    #     df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
+    #     df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
+    #     """
+    #     # check consistency of data frames
+    #     if not df_cash_inflows.index.equals(df_living_expenses.index):
+    #         raise ValueError("Indices of data frames are not the same!")
+    #
+    #     joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
+    #     joined_df.reset_index(inplace=True)
+    #     joined_df.rename(columns={"index": "Date"}, inplace=True)
+    #     joined_df["Date"] = pd.to_datetime(joined_df["Date"])
+    #     joined_df["Disinvestments"] = joined_df.apply(lambda x: determine_disinvestment(
+    #         cash_inflow=x["Cashflow"],
+    #         living_expenses=x["Living expenses"],
+    #         tax_rate=self.investor.tax_rate
+    #     ), axis=1)
+    #
+    #     joined_df.set_index(["Date"], inplace=True)
+    #     joined_df.index.freq = "M"
+    #
+    #     return joined_df
 
-        df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
-        df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
-        """
-
-        # check consistency of data frames
-        if not df_cash_inflows.index.equals(df_living_expenses.index):
-            raise ValueError("Indices of data frames are not the same!")
-
-        joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
-        joined_df.reset_index(inplace=True)
-        joined_df.rename(columns={"index": "Date"}, inplace=True)
-        joined_df["Date"] = pd.to_datetime(joined_df["Date"])
-        joined_df["Investments"] = joined_df.apply(lambda x: determine_investment(
-            cash_inflow=x["Cashflow"],
-            living_expenses=x["Living expenses"],
-            target_investment=self.investor.target_investment_amount *
-                              (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25),
-            investment_cap=self.investor.investment_cap
-        ), axis=1)
-
-        joined_df.set_index(["Date"], inplace=True)
-        joined_df.index.freq = "M"
-
-        return joined_df
-
-    def _create_disinvestments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
-        """
-        Create dataframe that includes cash inflows, living expenses and corresponding disinvestment amounts.
-
-        df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
-        df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
-        """
-        # check consistency of data frames
-        if not df_cash_inflows.index.equals(df_living_expenses.index):
-            raise ValueError("Indices of data frames are not the same!")
-
-        joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
-        joined_df.reset_index(inplace=True)
-        joined_df.rename(columns={"index": "Date"}, inplace=True)
-        joined_df["Date"] = pd.to_datetime(joined_df["Date"])
-        joined_df["Disinvestments"] = joined_df.apply(lambda x: determine_disinvestment(
-            cash_inflow=x["Cashflow"],
-            living_expenses=x["Living expenses"],
-            tax_rate=self.investor.tax_rate
-        ), axis=1)
-
-        joined_df.set_index(["Date"], inplace=True)
-        joined_df.index.freq = "M"
-
-        return joined_df
-
-    def create_df_of_investments_and_disinvestments(self):
-        """Create a dataframe that contains net cash inflows, living expenses, investment and disinvestments"""
-
-        df_net_cashflows = self._create_net_cashflows()
-        df_living_expenses = self._create_living_expenses()
-        df_investments = self._create_investments(df_net_cashflows, df_living_expenses)
-        df_disinvestments = self._create_disinvestments(df_net_cashflows, df_living_expenses)
-
-        # check that net cash flows and living expenses are the same
-        if not df_investments["Cashflow"].equals(df_disinvestments["Cashflow"]):
-            raise ValueError("Series for net cash inflows are not the same!")
-        if not df_investments["Living expenses"].equals(df_disinvestments["Living expenses"]):
-            raise ValueError("Series for living expenses are not the same!")
-
-        df_complete = pd.concat([df_investments, df_disinvestments], axis=1)
-
-        # remove duplicate columns (living expenses and cash inflows should be in twice)
-        df_complete = df_complete.loc[:, ~df_complete.columns.duplicated()].copy()
-
-        self.investments_disinvestments = df_complete
-
-        return df_complete
+    # def create_df_of_investments_and_disinvestments(self):
+    #     """Create a dataframe that contains net cash inflows, living expenses, investment and disinvestments"""
+    #
+    #     df_net_cashflows = self._create_net_cashflows()
+    #     df_living_expenses = self._create_living_expenses()
+    #     df_investments = self._create_investments(df_net_cashflows, df_living_expenses)
+    #     df_disinvestments = self._create_disinvestments(df_net_cashflows, df_living_expenses)
+    #
+    #     # check that net cash flows and living expenses are the same
+    #     if not df_investments["Cashflow"].equals(df_disinvestments["Cashflow"]):
+    #         raise ValueError("Series for net cash inflows are not the same!")
+    #     if not df_investments["Living expenses"].equals(df_disinvestments["Living expenses"]):
+    #         raise ValueError("Series for living expenses are not the same!")
+    #
+    #     df_complete = pd.concat([df_investments, df_disinvestments], axis=1)
+    #
+    #     # remove duplicate columns (living expenses and cash inflows should be in twice)
+    #     df_complete = df_complete.loc[:, ~df_complete.columns.duplicated()].copy()
+    #
+    #     self.investments_disinvestments = df_complete
+    #
+    #     return df_complete
 
     def create_portfolio_valuations(self) -> pd.DataFrame:
         """
@@ -354,7 +353,6 @@ class Simulation:
         return df
 
     def new_simulation(self):
-
         columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Investments", "Disinvestments",
                    "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end",
                    "Log return", "Share price", "Available shares"]
@@ -370,77 +368,57 @@ class Simulation:
         for index, row in df.iterrows():
             inflation_multiplier = (1 + self.inflation / 12) ** month
             target_investment = self.investor.target_investment_amount * inflation_multiplier
-            cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
-            living_expenses = self.investor.living_expenses * inflation_multiplier
-            cash_need = determine_cash_need(cash_inflow, living_expenses)
 
             if index == starting_date:
-                pf_beg = self.investor.current_portfolio_value
                 log_return = 0
                 share_price = 100
+                pf_beg = self.portfolio.determine_portfolio_value(share_price=share_price)
             else:
                 pf_beg = df.loc[prev_index, "PF end"]
                 log_return = self.return_generator.generate_monthly_returns(n=1)[0]
                 share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
 
-            df.loc[index, "Cash inflow"] = cash_inflow
+            df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Log return"] = log_return
+            df.loc[index, "Share price"] = share_price
+
+            cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
+            living_expenses = self.investor.living_expenses * inflation_multiplier
+            cash_need = determine_cash_need(cash_inflow, living_expenses)
+            df.loc[index, "Cash inflow"] = cash_inflow
             df.loc[index, "Living expenses"] = living_expenses
             df.loc[index, "Cash need"] = cash_need
+
+            # determine investments
             investments = determine_investment(cash_inflow=cash_inflow,
-                                               living_expenses=df.loc[index, "Living expenses"],
+                                               living_expenses=living_expenses,
                                                target_investment=target_investment,
                                                investment_cap=self.investor.investment_cap)
-            # disinvestments = determine_disinvestment(cash_inflow=cash_inflow,
-            #                                          living_expenses=living_expenses,
-            #                                          tax_rate=self.investor.tax_rate,
-            #                                          safety_buffer=self.investor.safety_buffer,
-            #                                          months_to_simulate=months_to_simulate,
-            #                                          pf_value=pf_beg)
-
-            # determine disinvestment amount
-            if cash_need > 0:
-                needed_transactions = self.portfolio.sell_net_volume(target_net_proceeds=cash_need, sale_price=share_price,
-                                                                 partial_sale=True, tax_rate=0.26375)
-                disinvestments = tax_estimator.determine_gross_transaction_volume(needed_transactions)
-                taxes_abs = tax_estimator.taxes_for_transactions(transactions=needed_transactions, share_price=share_price)[0]
-                try:
-                    taxes_rel = taxes_abs / disinvestments
-                except ZeroDivisionError as err:
-                    taxes_rel = 0
-                net_proceeds = disinvestments - taxes_abs
-            else:
-                disinvestments = 0
-                taxes_abs = 0
-                taxes_rel = 0
-                net_proceeds = 0
-            df.loc[index, "Investments"] = investments
             if investments > 0:
                 self.portfolio.buy_shares(nr_shares=investments / share_price, historical_price=share_price)
-            df.loc[index, "Disinvestments"] = disinvestments
+            df.loc[index, "Investments"] = investments
 
+            # determine disinvestment amount
+            required_transactions = self.portfolio.sell_net_volume(target_net_proceeds=cash_need,
+                                                                   sale_price=share_price,
+                                                                   partial_sale=True, tax_rate=0.26375)
+            disinvestments = tax_estimator.determine_gross_transaction_volume(required_transactions)
+            taxes_abs, taxes_rel = tax_estimator.taxes_for_transactions(transactions=required_transactions,
+                                                                        share_price=share_price)
+            df.loc[index, "Disinvestments"] = disinvestments
             df.loc[index, "Taxes abs."] = taxes_abs
             df.loc[index, "Taxes rel."] = taxes_rel
+
+            net_proceeds = disinvestments - taxes_abs
             df.loc[index, "Net proceeds"] = net_proceeds
+
             try:
                 df.loc[index, "Cash need fulfillment"] = net_proceeds / cash_need
-            except ZeroDivisionError as err:
+            except ZeroDivisionError:
                 df.loc[index, "Cash need fulfillment"] = 1.0
 
-            df.loc[index, "PF beg"] = pf_beg
-            df.loc[index, "Share price"] = share_price
-            df.loc[index, "PF end"] = pf_beg * math.exp(log_return) + investments - disinvestments
-
-            # todo: something is off with the pf value, the share price and the available shares
-            # todo: write a function for this
-            items = []
-            for value in (zip(*list(self.portfolio.fifo.values()))):
-                items.append(sum(value))
-            if bool(self.portfolio.fifo):  # empty dictionaries evaluate to False in Python
-                available_shares = items[0]
-            else:
-                available_shares = 0
-            df.loc[index, "Available shares"] = available_shares
+            df.loc[index, "PF end"] = self.portfolio.determine_portfolio_value(share_price=share_price)
+            df.loc[index, "Available shares"] = self.portfolio.determine_available_shares()
 
             prev_index = index
             month += 1
@@ -449,20 +427,18 @@ class Simulation:
         pprint(df)
 
         # todo: write function for storing the data in self.results, e.g. similar to create_portfolio valuations
-        # todo: write a better disinvestment function that determines net investments based on FIFO portfolios
-        # for that we also need to write an investment function that puts the securities into a FIFO container
 
-    def run_simulation(self, n: int = 10) -> None:
-        """
-        Run the simulation
-
-        n: int - number of simulations
-        """
-
-        self.create_df_of_investments_and_disinvestments()
-
-        for i in range(n):
-            self.results[i] = self.create_portfolio_valuations()
+    # def run_simulation(self, n: int = 10) -> None:
+    #     """
+    #     Run the simulation
+    #
+    #     n: int - number of simulations
+    #     """
+    #
+    #     self.create_df_of_investments_and_disinvestments()
+    #
+    #     for i in range(n):
+    #         self.results[i] = self.create_portfolio_valuations()
 
     def plot_results(self) -> None:
         """Plot the simulation results"""
@@ -619,10 +595,11 @@ if __name__ == '__main__':
                         target_investment_amount=4500.0,
                         investment_cap=True,
                         tax_rate=0.05,
-                        current_portfolio_value=200000,
                         safety_buffer=True)
 
     pf = tax_estimator.Portfolio()
+    pf.buy_shares(nr_shares=2000, historical_price=100)
+    # todo: the initial portfolio value of the investor needs to be placed into the portfolio
 
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
                             ending_date=datetime.date(2084, 1, 22),

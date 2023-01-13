@@ -39,6 +39,29 @@ class Portfolio:
         self.fifo[self.running_id + 1] = [nr_shares, historical_price]
         self.running_id += 1
 
+    def determine_available_shares(self) -> int:
+        """Determine the number of available shares in the portfolio"""
+
+        items = []
+        for value in (zip(*list(self.fifo.values()))):
+            items.append(sum(value))
+        if bool(self.fifo):  # empty dictionaries evaluate to False in Python
+            return items[0]
+        else:
+            return 0
+
+    def determine_portfolio_value(self, share_price: float) -> float:
+        """
+        Determine the value of the portfolio based on a given share price
+        :param share_price - the share price at which the portfolio value is to be determined
+        :return the portfolio valuation
+        """
+        if share_price < 0:
+            raise ValueError("To determine the value of the portfolio a positive share price value has to be given.")
+
+        available_shares = self.determine_available_shares()
+        return available_shares * share_price
+
     def sell_net_volume(self, target_net_proceeds: float, sale_price: float, tax_rate: float = 0.26375,
                         partial_sale: bool = False) -> OrderedDict:
         """

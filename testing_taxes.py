@@ -51,6 +51,12 @@ class TestSelling(unittest.TestCase):
                                                     partial_sale=True)
         self.assertEqual(exp_transactions, calc_transactions)
 
+    def test_selling_net_volume_zero_target(self):
+        exp_transactions = OrderedDict()
+        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=0, sale_price=100, tax_rate=0.1,
+                                                    partial_sale=True)
+        self.assertEqual(exp_transactions, calc_transactions)
+
 
 class TestCapitalGainsTaxes(unittest.TestCase):
 
@@ -96,7 +102,6 @@ class TestTaxesForTransactions(unittest.TestCase):
 
     def setUp(self) -> None:
         self.transactions = OrderedDict()
-        self.transactions = OrderedDict()
         self.transactions[30] = [100, 150]
         self.transactions[50] = [120, 150]
         self.transactions[4] = [100, 150]
@@ -127,6 +132,13 @@ class TestTaxesForTransactions(unittest.TestCase):
                                                                               share_price=sale_price)
         self.assertEqual((exp_taxes_abs, exp_taxes_rel), (calc_taxes_abs, calc_taxes_rel))
 
+    def test_taxes_for_no_transactions(self):
+        self.transactions = OrderedDict()
+        exp_taxes_abs = 0
+        exp_taxes_rel = 0
+        calc_taxes_abs, calc_taxes_rel = tax_estimator.taxes_for_transactions(transactions=self.transactions,
+                                                                              share_price=100)
+        self.assertEqual((exp_taxes_abs, exp_taxes_rel), (calc_taxes_abs, calc_taxes_rel))
 
 class TestDetermineGrossSale(unittest.TestCase):
 
@@ -156,3 +168,47 @@ class TestDetermineGrossTransactionVolume(unittest.TestCase):
         exp_gross_volume = 2400 + 4500
         calc_gross_volume = tax_estimator.determine_gross_transaction_volume(sale_transactions)
         self.assertEqual(exp_gross_volume, calc_gross_volume)
+
+class TestAvailableShares(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.pf = tax_estimator.Portfolio()
+        self.pf.buy_shares(nr_shares=100, historical_price=100)
+        self.pf.buy_shares(nr_shares=200, historical_price=120)
+
+    def test_available_shares(self):
+        exp_available_shares = 300
+        calc_available_shares = self.pf.determine_available_shares()
+        self.assertEqual(exp_available_shares, calc_available_shares)
+
+    def test_available_shares_empty_pf_01(self):
+        pf = tax_estimator.Portfolio()
+        exp_available_shares = 0
+        calc_available_shares = pf.determine_available_shares()
+        self.assertEqual(exp_available_shares, calc_available_shares)
+
+    def test_available_shares_empty_pf_02(self):
+        pf = tax_estimator.Portfolio()
+        pf.buy_shares(nr_shares=40, historical_price=100)
+        pf.sell_shares(nr_shares=40, sale_price=120)
+        exp_available_shares = 0
+        calc_available_shares = pf.determine_available_shares()
+        self.assertEqual(exp_available_shares, calc_available_shares)
+
+class TestPortfolioValuation(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.pf = tax_estimator.Portfolio()
+        self.pf.buy_shares(nr_shares=100, historical_price=100)
+        self.pf.buy_shares(nr_shares=200, historical_price=120)
+        self.pf.sell_shares(nr_shares=250, sale_price=150)
+
+    def test_pf_valuation(self):
+        current_share_price = 100
+        exp_valuation = 50 * 100
+        calc_valuation = self.pf.determine_portfolio_value(share_price=current_share_price)
+        self.assertEqual(exp_valuation, calc_valuation)
+
+    def test_pf_valuation_neg_share_price(self):
+        current_share_price = -20
+        self.assertRaises(ValueError, self.pf.determine_portfolio_value, share_price=current_share_price)
