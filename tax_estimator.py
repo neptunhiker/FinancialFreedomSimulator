@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from dataclasses import dataclass, field
+import numpy as np
 from pprint import pprint
 from typing import Tuple
 
@@ -208,6 +209,73 @@ def taxes_for_transactions(transactions: OrderedDict, share_price: float, tax_ra
     return taxes_abs, taxes_rel
 
 
+@dataclass
+class TaxBase:
+    tax_exemption: float = 1000
+    loss_pot: float = 0
+    withheld_taxes: float = 0
+    tax_rate: float = 0.26375
+
+    def adjust_tax_exemption(self, adjustment: float) -> None:
+        """
+        Adjust the tax exemption by the given adjustment amount
+        :param adjustment: amount by which the tax exemption is to be adjusted
+        :return: None
+        """
+
+        assert self.tax_exemption + adjustment > 0
+
+        self.tax_exemption += adjustment
+
+    def sell_securities(self, sale_price: float, historical_price: float, nr_shares: float) -> dict:
+        """
+        Adjust the tax exemption amount and/or loss pot based on a sale of securities and the respective gain/loss
+        :param sale_price: price at which the securities are sold
+        :param historical_price: price at which the securities were bought
+        :param nr_shares: number of shares being sold
+        :return: return dict of taxable amount, absolute and relative taxes
+        """
+
+        gain_loss = nr_shares * (sale_price - historical_price)
+        residual_gain_loss = max(0, gain_loss - self.loss_pot)
+
+        # adjust loss pot
+        self.loss_pot = max(0, self.loss_pot - gain_loss)
+
+        # adjust tax exemption
+        if residual_gain_loss > 0:
+            taxable = max(0, residual_gain_loss - self.tax_exemption)
+            self.tax_exemption = max(0, self.tax_exemption - residual_gain_loss)
+        else:
+            taxable = 0
+
+        # adjust taxes withheld
+        taxes = self._calculate_taxes(taxable=taxable, sale_price=sale_price, nr_shares=nr_shares)
+        self.withheld_taxes += taxes["Taxes absolute"]
+
+        result = {"Taxes absolute": taxes["Taxes absolute"],
+                  "Taxes relative": taxes["Taxes relative"],
+                  "Taxable": taxable}
+
+        return result
+
+    def _calculate_taxes(self, taxable: float, sale_price: float, nr_shares: float) -> dict:
+        """
+        Calculate the absolute and relative taxes for a securities sale
+        :param taxable: the amount that is to be taxed
+        :param sale_price: price at which the securities are sold
+        :param nr_shares: number of shares being sold
+        :return: dictionary of absolute and relative taxes
+        """
+        taxes_abs = taxable * self.tax_rate
+        try:
+            taxes_rel = taxes_abs / (sale_price * nr_shares)
+        except ZeroDivisionError:
+            taxes_rel = 0
+
+        return {"Taxes absolute": taxes_abs, "Taxes relative": taxes_rel}
+
+
 def determine_gross_transaction_volume(transactions: OrderedDict) -> float:
     """
     Determine the gross volume based on an Ordered dict of sale transactions
@@ -234,13 +302,14 @@ def determine_gross_sale(target_net_proceeds: float, sale_price: float, historic
     if sale_price < historical_price:
         number_of_shares_to_be_sold = target_net_proceeds / sale_price
     else:
-        nr_shares_without_tax_exemption = target_net_proceeds / (sale_price - (sale_price - historical_price) * tax_rate)
+        nr_shares_without_tax_exemption = target_net_proceeds / (
+                    sale_price - (sale_price - historical_price) * tax_rate)
         gain_without_tax_exemption = nr_shares_without_tax_exemption * (sale_price - historical_price)
         if tax_exemption >= gain_without_tax_exemption:
             number_of_shares_to_be_sold = target_net_proceeds / sale_price
         else:
             number_of_shares_to_be_sold = (target_net_proceeds - tax_exemption * tax_rate) / \
-                                      (sale_price - (sale_price - historical_price) * tax_rate)
+                                          (sale_price - (sale_price - historical_price) * tax_rate)
 
     gross_sale_volume = number_of_shares_to_be_sold * sale_price
 
