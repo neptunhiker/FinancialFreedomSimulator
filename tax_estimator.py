@@ -71,12 +71,14 @@ class Portfolio:
         return available_shares * share_price
 
     def sell_net_volume(self, target_net_proceeds: float, sale_price: float, tax_rate: float = 0.26375,
+                        tax_exemption: float = 0,
                         partial_sale: bool = False) -> OrderedDict:
         """
         Sell a certain volume of the portfolio such that the net proceeds are equal to the target net proceeds
         :param target_net_proceeds: the target proceeds after taxes
         :param sale_price: the price at which shares are to be sold
         :param tax_rate: the tax rate at which gains are taxed
+        :param tax_exemption: the tax exemption amount that will not be taxed
         :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
             the target net
         :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
@@ -91,16 +93,18 @@ class Portfolio:
                 historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
                 available_gross_proceeds = next_available_nr_shares * sale_price
                 taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                        number_of_shares=next_available_nr_shares, tax_rate=tax_rate)[0]
+                                        number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
+                                        tax_exemption=tax_exemption)[0]
                 available_net_proceeds = available_gross_proceeds - taxes
                 if net_proceeds + available_net_proceeds >= target_net_proceeds:
                     required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
                                                                sale_price=sale_price, historical_price=historical_price,
-                                                               tax_rate=tax_rate)[1]
+                                                               tax_rate=tax_rate, tax_exemption=tax_exemption)[1]
                     transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
                     shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
                     taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                            number_of_shares=shares_to_be_sold, tax_rate=tax_rate)[0]
+                                            number_of_shares=shares_to_be_sold, tax_rate=tax_rate,
+                                            tax_exemption=tax_exemption)[0]
                     gross_proceeds = shares_to_be_sold * sale_price
                     net_proceeds += gross_proceeds - taxes
                     sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
@@ -108,7 +112,8 @@ class Portfolio:
                 else:
                     self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
                     taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                            number_of_shares=next_available_nr_shares, tax_rate=tax_rate)[0]
+                                            number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
+                                            tax_exemption=tax_exemption)[0]
                     gross_proceeds = next_available_nr_shares * sale_price
                     net_proceeds += gross_proceeds - taxes
                     sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
@@ -165,7 +170,7 @@ class Portfolio:
         """
         arbitrary_share_price = 100
         nr_shares = self.initial_portfolio_value / arbitrary_share_price
-        historical_price = self.initial_portfolio_value / (1 + self.initial_perc_gain)
+        historical_price = arbitrary_share_price / (1 + self.initial_perc_gain)
         self.buy_shares(nr_shares=nr_shares, historical_price=historical_price)
         return None
 
@@ -173,20 +178,27 @@ class Portfolio:
         pprint(self.fifo)
 
 
-def taxes_for_transactions(transactions: OrderedDict, share_price) -> Tuple[float, float]:
+def taxes_for_transactions(transactions: OrderedDict, share_price: float, tax_rate: float = 0.26375,
+                           tax_exemption: float = 0) -> Tuple[float, float]:
     """
     Calculate taxes for a list of transactions
     :param transactions: Ordered dictionary of transactions containing shares to be sold (key) and their
         historical prices and sale prices (values)
     :param share_price: the price at which the shares were sold
+    :param tax_rate: the rate at which net gains are taxed
+    :param tax_exemption: the amount of gains that will not be taxed
     :return: tuple of absolute taxes and relative taxes in relation to the transaction volume
     """
     transaction_volume = 0
     taxes_abs = 0
     for key, value in transactions.items():
-        transaction_volume += key * share_price
-        taxes_abs += calculate_taxes(sale_price=share_price, historical_price=value[0],
-                                     number_of_shares=key, tax_rate=0.26375)[0]
+        nr_shares = key
+        historical_price = value[0]
+        transaction_volume += nr_shares * share_price
+        taxes_abs += calculate_taxes(sale_price=share_price, historical_price=historical_price,
+                                     number_of_shares=key, tax_rate=tax_rate, tax_exemption=tax_exemption)[0]
+        gain_loss = key * (share_price - historical_price)
+        tax_exemption = max(0, tax_exemption - max(0, gain_loss))
 
     try:
         taxes_rel = taxes_abs / transaction_volume
@@ -209,24 +221,45 @@ def determine_gross_transaction_volume(transactions: OrderedDict) -> float:
 
 
 def determine_gross_sale(target_net_proceeds: float, sale_price: float, historical_price: float,
-                         tax_rate: float = 0.26375) -> Tuple[float, float]:
+                         tax_rate: float = 0.26375, tax_exemption: float = 0) -> Tuple[float, float]:
     """
     Determine the necessary gross sale to achieve the desired net proceeds
     :param target_net_proceeds: the cash amount that is intended to be achieved after taxes
     :param sale_price: the price at which the funds are sold
     :param historical_price: the price at which the funds were bought originally
     :param tax_rate: the tax rate at which gains are assumed to be taxed
+    :param tax_exemption: the amount of the gains that are exempt from being taxed
     :return: (number_of_shares_to_be_sold, gross_sale_volume)
     """
     if sale_price < historical_price:
         number_of_shares_to_be_sold = target_net_proceeds / sale_price
-        gross_sale_volume = target_net_proceeds
     else:
-        number_of_shares_to_be_sold = target_net_proceeds / (sale_price - (sale_price - historical_price) * tax_rate)
-        gross_sale_volume = number_of_shares_to_be_sold * sale_price
+        nr_shares_without_tax_exemption = target_net_proceeds / (sale_price - (sale_price - historical_price) * tax_rate)
+        gain_without_tax_exemption = nr_shares_without_tax_exemption * (sale_price - historical_price)
+        if tax_exemption >= gain_without_tax_exemption:
+            number_of_shares_to_be_sold = target_net_proceeds / sale_price
+        else:
+            number_of_shares_to_be_sold = (target_net_proceeds - tax_exemption * tax_rate) / \
+                                      (sale_price - (sale_price - historical_price) * tax_rate)
+
+    gross_sale_volume = number_of_shares_to_be_sold * sale_price
 
     # return 1, 2
     return number_of_shares_to_be_sold, gross_sale_volume
+
+
+def determine_disinvestment_gain_or_loss(transactions: OrderedDict) -> float:
+    """
+    Determine the gain or loss made based on given transactions
+    :param transactions: Ordered dict of shares to be sold (key) and respective historical price and sale price (value)
+    :return: the absolute gain (positive) or loss of the transactions
+    """
+
+    gain = 0
+    for key, value in transactions.items():
+        gain += key * (value[1] - value[0])
+
+    return gain
 
 
 def main():

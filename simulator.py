@@ -140,17 +140,11 @@ class Investor:
     target_investment_amount: float = 4000.0
     investment_cap: bool = True
     safety_buffer: bool = False
+    tax_exemption: float = 1000
 
     @property
     def name(self):
         return f"{self.first_name} {self.last_name}"
-
-#
-# @dataclass
-# class Portfolio:
-#     df: pd.DataFrame
-#     pf_value_initial: float
-
 
 class Simulation:
 
@@ -229,133 +223,6 @@ class Simulation:
 
         return grouped
 
-    # def _create_living_expenses(self) -> pd.DataFrame:
-    #     """Create dataframe with future living expenses scaled by inflation"""
-    #
-    #     df = pd.DataFrame(columns=["Date", "Living expenses"])
-    #     df["Date"] = pd.date_range(self.starting_date, self.ending_date, freq="M")
-    #     df["Date"] = df["Date"].apply(lambda x: x.date())
-    #     df["Living expenses"] = df.apply(lambda x: determine_living_expenses(
-    #         self.starting_date, self.investor.living_expenses, x["Date"], self.inflation), axis=1)
-    #     df.set_index("Date", inplace=True)
-    #     return df
-
-    # def _create_investments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
-    #     """
-    #     Create dataframe that includes cash inflows, living expenses and corresponding investment amounts.
-    #
-    #     df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
-    #     df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
-    #     """
-    #
-    #     # check consistency of data frames
-    #     if not df_cash_inflows.index.equals(df_living_expenses.index):
-    #         raise ValueError("Indices of data frames are not the same!")
-    #
-    #     joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
-    #     joined_df.reset_index(inplace=True)
-    #     joined_df.rename(columns={"index": "Date"}, inplace=True)
-    #     joined_df["Date"] = pd.to_datetime(joined_df["Date"])
-    #     joined_df["Investments"] = joined_df.apply(lambda x: determine_investment(
-    #         cash_inflow=x["Cashflow"],
-    #         living_expenses=x["Living expenses"],
-    #         target_investment=self.investor.target_investment_amount *
-    #                           (1 + self.inflation) ** ((x["Date"].date() - self.starting_date).days / 365.25),
-    #         investment_cap=self.investor.investment_cap
-    #     ), axis=1)
-    #
-    #     joined_df.set_index(["Date"], inplace=True)
-    #     joined_df.index.freq = "M"
-    #
-    #     return joined_df
-
-    # def _create_disinvestments(self, df_cash_inflows: pd.DataFrame, df_living_expenses: pd.DataFrame) -> pd.DataFrame:
-    #     """
-    #     Create dataframe that includes cash inflows, living expenses and corresponding disinvestment amounts.
-    #
-    #     df_cash_inflows: pd.DataFrame - a dataframe that contains net cash inflows over time
-    #     df_living_expenses: pd.DataFrame - a dataframe that contains future living expenses
-    #     """
-    #     # check consistency of data frames
-    #     if not df_cash_inflows.index.equals(df_living_expenses.index):
-    #         raise ValueError("Indices of data frames are not the same!")
-    #
-    #     joined_df = pd.concat([df_cash_inflows, df_living_expenses], axis=1)
-    #     joined_df.reset_index(inplace=True)
-    #     joined_df.rename(columns={"index": "Date"}, inplace=True)
-    #     joined_df["Date"] = pd.to_datetime(joined_df["Date"])
-    #     joined_df["Disinvestments"] = joined_df.apply(lambda x: determine_disinvestment(
-    #         cash_inflow=x["Cashflow"],
-    #         living_expenses=x["Living expenses"],
-    #         tax_rate=self.investor.tax_rate
-    #     ), axis=1)
-    #
-    #     joined_df.set_index(["Date"], inplace=True)
-    #     joined_df.index.freq = "M"
-    #
-    #     return joined_df
-
-    # def create_df_of_investments_and_disinvestments(self):
-    #     """Create a dataframe that contains net cash inflows, living expenses, investment and disinvestments"""
-    #
-    #     df_net_cashflows = self._create_net_cashflows()
-    #     df_living_expenses = self._create_living_expenses()
-    #     df_investments = self._create_investments(df_net_cashflows, df_living_expenses)
-    #     df_disinvestments = self._create_disinvestments(df_net_cashflows, df_living_expenses)
-    #
-    #     # check that net cash flows and living expenses are the same
-    #     if not df_investments["Cashflow"].equals(df_disinvestments["Cashflow"]):
-    #         raise ValueError("Series for net cash inflows are not the same!")
-    #     if not df_investments["Living expenses"].equals(df_disinvestments["Living expenses"]):
-    #         raise ValueError("Series for living expenses are not the same!")
-    #
-    #     df_complete = pd.concat([df_investments, df_disinvestments], axis=1)
-    #
-    #     # remove duplicate columns (living expenses and cash inflows should be in twice)
-    #     df_complete = df_complete.loc[:, ~df_complete.columns.duplicated()].copy()
-    #
-    #     self.investments_disinvestments = df_complete
-    #
-    #     return df_complete
-
-    # def create_portfolio_valuations(self) -> pd.DataFrame:
-    #     """
-    #     Create a dataframe that simulates the portfolio valuation
-    #     """
-    #
-    #     # check that a dataframe for investments and disinvestments has already been generated
-    #     if "Investments" not in self.investments_disinvestments.columns and \
-    #             "Disinvestments" not in self.investments_disinvestments.columns:
-    #         raise ValueError("Before being able to create portfolio valuations a dataframe needs to be created "
-    #                          "that contains investments and disinvestments")
-    #
-    #     df = self.investments_disinvestments.copy()
-    #
-    #     # add a column for the return data (needs to be simulated)
-    #     df["Log return"] = self.return_generator.generate_monthly_returns(n=len(self.investments_disinvestments)).values
-    #
-    #     # add additional columns for PF valuation at the beginning and end of period
-    #     df["PF Beg"] = np.zeros(len(df))
-    #     df["PF End"] = np.zeros(len(df))
-    #
-    #     # loop through dataframe and update portfolio values
-    #     counter = 0
-    #     for index, row in df.iterrows():
-    #         if counter == 0:
-    #             row["PF Beg"] = self.investor.current_portfolio_value
-    #         else:
-    #             row["PF Beg"] = df.loc[previous_index, "PF End"]
-    #
-    #         if row["PF Beg"] < 0:
-    #             row["PF End"] = row["PF Beg"] + row["Investments"] - row["Disinvestments"]
-    #         else:
-    #             row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
-    #
-    #         previous_index = index
-    #         counter += 1
-    #
-    #     return df
-
     def run_simulation(self, n: int = 1) -> None:
         """
         Run the simulation
@@ -371,8 +238,9 @@ class Simulation:
         Simulate the time series and return the result as a dataframe
         :return: Result of the simulation
         """
-        columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Investments", "Disinvestments",
-                   "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end",
+        columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Tax exemption beg", "Investments",
+                   "Disinvestments",
+                   "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end", "Tax exemption end",
                    "Log return", "Share price", "Available shares"]
         months_to_simulate = self.months_to_simulate
         df = pd.DataFrame(columns=columns, index=self.dates)
@@ -381,20 +249,25 @@ class Simulation:
         for index, row in df.iterrows():
             inflation_multiplier = (1 + self.inflation / 12) ** month
             target_investment = self.investor.target_investment_amount * inflation_multiplier
+            tax_exemption = self.investor.tax_exemption * inflation_multiplier
 
             if index == self.true_starting_date:
                 log_return = 0
                 share_price = 100
                 pf_beg = self.portfolio.determine_portfolio_value(share_price=share_price)
+                tax_exemption_beg = self.investor.tax_exemption
             else:
                 pf_beg = df.loc[prev_index, "PF end"]
                 log_return = self.return_generator.generate_monthly_returns(n=1)[0]
                 share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
+                tax_exemption_beg = df.loc[prev_index, "Tax exemption end"]
 
             df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Log return"] = log_return
             df.loc[index, "Share price"] = share_price
+            df.loc[index, "Tax exemption beg"] = tax_exemption_beg
 
+            # to do: gross and net proceeds do not satisfy cash need on 2033-03-31
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
             living_expenses = self.investor.living_expenses * inflation_multiplier
             cash_need = determine_cash_need(cash_inflow, living_expenses)
@@ -414,15 +287,20 @@ class Simulation:
             # determine disinvestment amount
             required_transactions = self.portfolio.sell_net_volume(target_net_proceeds=cash_need,
                                                                    sale_price=share_price,
-                                                                   partial_sale=True, tax_rate=0.26375)
+                                                                   partial_sale=True, tax_rate=0.26375,
+                                                                   tax_exemption=tax_exemption)
             disinvestments = tax_estimator.determine_gross_transaction_volume(required_transactions)
+            gain_loss = tax_estimator.determine_disinvestment_gain_or_loss(required_transactions)
 
             # determine taxes
             taxes_abs, taxes_rel = tax_estimator.taxes_for_transactions(transactions=required_transactions,
-                                                                        share_price=share_price)
+                                                                        share_price=share_price,
+                                                                        tax_exemption=tax_exemption_beg)
             df.loc[index, "Disinvestments"] = disinvestments
             df.loc[index, "Taxes abs."] = taxes_abs
             df.loc[index, "Taxes rel."] = taxes_rel
+            df.loc[index, "Tax exemption end"] = max(0, tax_exemption_beg - max(0, gain_loss))
+            # todo: tax exemption needs to increase at the beginning of each year
 
             net_proceeds = disinvestments - taxes_abs
             df.loc[index, "Net proceeds"] = net_proceeds
@@ -439,6 +317,7 @@ class Simulation:
             month += 1
             months_to_simulate -= 1
 
+        pprint(df)
         return df
 
         # todo: write function for storing the data in self.results, e.g. similar to create_portfolio valuations
@@ -568,48 +447,17 @@ if __name__ == '__main__':
     pd.set_option('display.max_rows', None)
     pd.set_option('display.expand_frame_repr', False)
     random.seed(123)
-    #
-    # print(return_simulator(monthly_investment=4500,
-    #                        expected_rate_of_return=0.07,
-    #                        yearly_increase_of_monthly_investment=0.05,
-    #                        months_to_simulate=120,
-    #                        initial_pf_value=200000,
-    #                        inflation=0.03,
-    #                        plot=True))
-    #
-    # print(return_simulator(monthly_investment=20,
-    #                        expected_rate_of_return=0.0849,
-    #                        yearly_increase_of_monthly_investment=0.0,
-    #                        months_to_simulate=600,
-    #                        initial_pf_value=0,
-    #                        inflation=0.03,
-    #                        plot=True))
-    #
-    # print(return_simulator(monthly_investment=20,
-    #                        expected_rate_of_return=0.08,
-    #                        yearly_increase_of_monthly_investment=0.0,
-    #                        months_to_simulate=144,
-    #                        initial_pf_value=1440,
-    #                        inflation=0.03,
-    #                        plot=True))
-    #
-    # print(return_simulator(monthly_investment=2500,
-    #                        expected_rate_of_return=0.08,
-    #                        yearly_increase_of_monthly_investment=0.04,
-    #                        months_to_simulate=120,
-    #                        initial_pf_value=200000,
-    #                        inflation=0.03,
-    #                        plot=True))
-    #
+
     yearly_return = 0.08
     yearly_vola = 0.18
-    number_of_simulations = 2
+    number_of_simulations = 1
 
     investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
                         living_expenses=3000,
                         target_investment_amount=4500.0,
                         investment_cap=True,
-                        safety_buffer=True)
+                        safety_buffer=True,
+                        )
 
     # todo: make sure the investment cap is considered properly
     # todo: make sure the safety buffer is considered properly
@@ -638,7 +486,6 @@ if __name__ == '__main__':
                                        ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
 
-    # simulation.create_simulation_df()
     simulation.run_simulation(n=number_of_simulations)
     # pprint(simulation.analyze_results())
     simulation.plot_results()

@@ -115,6 +115,18 @@ class TestTaxesForTransactions(unittest.TestCase):
                                                                               share_price=sale_price)
         self.assertEqual((exp_taxes_abs, exp_taxes_rel), (calc_taxes_abs, calc_taxes_rel))
 
+    def test_transactions_high_sale_price_with_tax_exemption(self) -> None:
+        sale_price = 150
+        transaction_volume = 12600  # 4500 + 7500 + 600
+        tax_exemption = 1000
+        exp_taxes_abs = 580.25  # 131.875 + 395.625 + 52.75
+        exp_taxes_rel = 0.0460515873015873
+        calc_taxes_abs, calc_taxes_rel = tax_estimator.taxes_for_transactions(transactions=self.transactions,
+                                                                              share_price=sale_price,
+                                                                              tax_exemption=tax_exemption
+                                                                              )
+        self.assertEqual((exp_taxes_abs, exp_taxes_rel), (calc_taxes_abs, calc_taxes_rel))
+
     def test_transactions_medium_sale_price(self) -> None:
         sale_price = 120
         transaction_volume = 10080  # 3600 + 6000 + 480
@@ -140,6 +152,7 @@ class TestTaxesForTransactions(unittest.TestCase):
                                                                               share_price=100)
         self.assertEqual((exp_taxes_abs, exp_taxes_rel), (calc_taxes_abs, calc_taxes_rel))
 
+
 class TestDetermineGrossSale(unittest.TestCase):
 
     def test_determine_gross_sale_with_taxes(self):
@@ -150,12 +163,39 @@ class TestDetermineGrossSale(unittest.TestCase):
             target_net_proceeds=target_net_proceeds, sale_price=120, historical_price=100, tax_rate=0.1)
         self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
 
+    def test_determine_gross_sale_with_taxes_and_tax_exemption_large_gain(self):
+        target_net_proceeds = 30000
+        exp_nr_shares = 206.20689655172413
+        exp_transaction_volume = 30931.03448275862
+        calc_nr_shares, calc_gross_sale_volume = tax_estimator.determine_gross_sale(
+            target_net_proceeds=target_net_proceeds, sale_price=150, historical_price=100, tax_rate=0.1,
+            tax_exemption=1000)
+        self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
+
+    def test_determine_gross_sale_with_taxes_and_tax_exemption_small_gain(self):
+        target_net_proceeds = 150
+        exp_nr_shares = 1
+        exp_transaction_volume = 150
+        calc_nr_shares, calc_gross_sale_volume = tax_estimator.determine_gross_sale(
+            target_net_proceeds=target_net_proceeds, sale_price=150, historical_price=100, tax_rate=0.1,
+            tax_exemption=1000)
+        self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
+
     def test_determine_gross_sale_no_taxes(self):
         target_net_proceeds = 3000
         exp_nr_shares = 60
         exp_transaction_volume = 3000
         calc_nr_shares, calc_gross_sale_volume = tax_estimator.determine_gross_sale(
             target_net_proceeds=target_net_proceeds, sale_price=50, historical_price=100, tax_rate=0.1)
+        self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
+
+    def test_determine_gross_sale_no_taxes_with_tax_exemption(self):
+        target_net_proceeds = 3000
+        exp_nr_shares = 60
+        exp_transaction_volume = 3000
+        calc_nr_shares, calc_gross_sale_volume = tax_estimator.determine_gross_sale(
+            target_net_proceeds=target_net_proceeds, sale_price=50, historical_price=100,
+            tax_rate=0.1, tax_exemption=1000)
         self.assertEqual((exp_nr_shares, exp_transaction_volume), (calc_nr_shares, calc_gross_sale_volume))
 
 
@@ -168,6 +208,7 @@ class TestDetermineGrossTransactionVolume(unittest.TestCase):
         exp_gross_volume = 2400 + 4500
         calc_gross_volume = tax_estimator.determine_gross_transaction_volume(sale_transactions)
         self.assertEqual(exp_gross_volume, calc_gross_volume)
+
 
 class TestAvailableShares(unittest.TestCase):
 
@@ -214,11 +255,12 @@ class TestPortfolioValuation(unittest.TestCase):
         current_share_price = -20
         self.assertRaises(ValueError, self.pf.determine_portfolio_value, share_price=current_share_price)
 
+
 class TestPortfolioSetup(unittest.TestCase):
 
     def test_standard_setup(self) -> None:
         self.pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=0.1)
-        exp_historical_price = 181818.1818181818
+        exp_historical_price = 90.9090909090909
         exp_nr_shares = 2000
         exp_portfolio = OrderedDict()
         exp_portfolio[1] = [exp_nr_shares, exp_historical_price]
@@ -227,7 +269,7 @@ class TestPortfolioSetup(unittest.TestCase):
 
     def test_setup_with_negative_gain(self) -> None:
         self.pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=-0.1)
-        exp_historical_price = 222222.22222222222
+        exp_historical_price = 111.11111111111111
         exp_nr_shares = 2000
         exp_portfolio = OrderedDict()
         exp_portfolio[1] = [exp_nr_shares, exp_historical_price]
@@ -239,3 +281,26 @@ class TestPortfolioSetup(unittest.TestCase):
 
     def test_neg_pf_value_setup(self) -> None:
         self.assertRaises(ValueError, tax_estimator.Portfolio, initial_portfolio_value=-20000)
+
+
+class TestDisinvestmentGainLoss(unittest.TestCase):
+
+    def test_gain(self):
+        transactions = OrderedDict()
+        transactions[30] = [100, 150]
+        transactions[50] = [120, 150]
+        transactions[4] = [100, 150]
+        exp_gain = 3200
+        calc_gain = tax_estimator.determine_disinvestment_gain_or_loss(transactions=transactions)
+        self.assertEqual(exp_gain, calc_gain)
+
+    def test_loss(self):
+        transactions = OrderedDict()
+        transactions[30] = [100, 110]
+        transactions[50] = [120, 100]
+        transactions[4] = [100, 80]
+        exp_gain = -780
+        calc_gain = tax_estimator.determine_disinvestment_gain_or_loss(transactions=transactions)
+        self.assertEqual(exp_gain, calc_gain)
+
+
