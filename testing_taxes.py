@@ -195,6 +195,7 @@ class TestAvailableShares(unittest.TestCase):
         calc_available_shares = pf.determine_available_shares()
         self.assertEqual(exp_available_shares, calc_available_shares)
 
+
 class TestPortfolioValuation(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -212,3 +213,29 @@ class TestPortfolioValuation(unittest.TestCase):
     def test_pf_valuation_neg_share_price(self):
         current_share_price = -20
         self.assertRaises(ValueError, self.pf.determine_portfolio_value, share_price=current_share_price)
+
+class TestPortfolioSetup(unittest.TestCase):
+
+    def test_standard_setup(self) -> None:
+        self.pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=0.1)
+        exp_historical_price = 181818.1818181818
+        exp_nr_shares = 2000
+        exp_portfolio = OrderedDict()
+        exp_portfolio[1] = [exp_nr_shares, exp_historical_price]
+        calc_portfolio = self.pf.fifo
+        self.assertEqual(exp_portfolio, calc_portfolio)
+
+    def test_setup_with_negative_gain(self) -> None:
+        self.pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=-0.1)
+        exp_historical_price = 222222.22222222222
+        exp_nr_shares = 2000
+        exp_portfolio = OrderedDict()
+        exp_portfolio[1] = [exp_nr_shares, exp_historical_price]
+        calc_portfolio = self.pf.fifo
+        self.assertEqual(exp_portfolio, calc_portfolio)
+
+    def test_loss_too_large(self):
+        self.assertRaises(ValueError, tax_estimator.Portfolio, initial_portfolio_value=200000, initial_perc_gain=-1.2)
+
+    def test_neg_pf_value_setup(self) -> None:
+        self.assertRaises(ValueError, tax_estimator.Portfolio, initial_portfolio_value=-20000)

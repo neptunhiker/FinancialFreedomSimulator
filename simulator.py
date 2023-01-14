@@ -597,9 +597,7 @@ if __name__ == '__main__':
                         tax_rate=0.05,
                         safety_buffer=True)
 
-    pf = tax_estimator.Portfolio()
-    pf.buy_shares(nr_shares=2000, historical_price=100)
-    # todo: the initial portfolio value of the investor needs to be placed into the portfolio
+    pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=0.1)
 
     simulation = Simulation(starting_date=datetime.date(2023, 1, 22),
                             ending_date=datetime.date(2084, 1, 22),

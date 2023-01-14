@@ -30,10 +30,18 @@ def calculate_taxes(sale_price: float, historical_price: float, number_of_shares
 class Portfolio:
     fifo: OrderedDict = field(init=False)
     running_id: int = field(init=False)
+    initial_portfolio_value: float = 0
+    initial_perc_gain: float = 0
 
     def __post_init__(self):
         self.fifo = OrderedDict()
         self.running_id = 0
+        if self.initial_portfolio_value > 0:
+            self.set_up()
+        elif self.initial_portfolio_value < 0:
+            raise ValueError("Initial portfolio value must be positive.")
+        if self.initial_perc_gain <= -1:
+            raise ValueError("The initial percentage gain for the portfolio may not be less or equal to -1.")
 
     def buy_shares(self, nr_shares: float, historical_price: float):
         self.fifo[self.running_id + 1] = [nr_shares, historical_price]
@@ -149,6 +157,17 @@ class Portfolio:
             transactions[shares_to_be_sold] = [historical_price, sale_price]
 
         return transactions
+
+    def set_up(self) -> None:
+        """
+        Set up the portfolio with a given gain based on assumed arbitrary share price of 100
+        :return: None
+        """
+        arbitrary_share_price = 100
+        nr_shares = self.initial_portfolio_value / arbitrary_share_price
+        historical_price = self.initial_portfolio_value / (1 + self.initial_perc_gain)
+        self.buy_shares(nr_shares=nr_shares, historical_price=historical_price)
+        return None
 
     def show_positions(self):
         pprint(self.fifo)
