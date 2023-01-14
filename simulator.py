@@ -139,7 +139,6 @@ class Investor:
     living_expenses: float = 4000.0
     target_investment_amount: float = 4000.0
     investment_cap: bool = True
-    tax_rate: float = 0.05
     safety_buffer: bool = False
 
     @property
@@ -160,6 +159,11 @@ class Simulation:
                  inflation: float = 0.02, return_generator: returngens.ReturnGenerator = returngens.GBM(0.07, 0.2)):
         self.starting_date = starting_date
         self.ending_date = ending_date
+        self.dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
+        self.true_starting_date = min(self.dates).date()
+        self.true_ending_date = max(self.dates).date()
+        rel_delta = dateutil.relativedelta.relativedelta(self.true_ending_date, self.true_starting_date)
+        self.months_to_simulate = rel_delta.months + rel_delta.years * 12
         self.gross_cash_flows = pd.DataFrame(columns=["Date", "Investor age", "CF direction", "Amount", "Type"])
         self.investments_disinvestments = pd.DataFrame()
         self.investor = investor
@@ -314,62 +318,71 @@ class Simulation:
     #
     #     return df_complete
 
-    def create_portfolio_valuations(self) -> pd.DataFrame:
+    # def create_portfolio_valuations(self) -> pd.DataFrame:
+    #     """
+    #     Create a dataframe that simulates the portfolio valuation
+    #     """
+    #
+    #     # check that a dataframe for investments and disinvestments has already been generated
+    #     if "Investments" not in self.investments_disinvestments.columns and \
+    #             "Disinvestments" not in self.investments_disinvestments.columns:
+    #         raise ValueError("Before being able to create portfolio valuations a dataframe needs to be created "
+    #                          "that contains investments and disinvestments")
+    #
+    #     df = self.investments_disinvestments.copy()
+    #
+    #     # add a column for the return data (needs to be simulated)
+    #     df["Log return"] = self.return_generator.generate_monthly_returns(n=len(self.investments_disinvestments)).values
+    #
+    #     # add additional columns for PF valuation at the beginning and end of period
+    #     df["PF Beg"] = np.zeros(len(df))
+    #     df["PF End"] = np.zeros(len(df))
+    #
+    #     # loop through dataframe and update portfolio values
+    #     counter = 0
+    #     for index, row in df.iterrows():
+    #         if counter == 0:
+    #             row["PF Beg"] = self.investor.current_portfolio_value
+    #         else:
+    #             row["PF Beg"] = df.loc[previous_index, "PF End"]
+    #
+    #         if row["PF Beg"] < 0:
+    #             row["PF End"] = row["PF Beg"] + row["Investments"] - row["Disinvestments"]
+    #         else:
+    #             row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
+    #
+    #         previous_index = index
+    #         counter += 1
+    #
+    #     return df
+
+    def run_simulation(self, n: int = 1) -> None:
         """
-        Create a dataframe that simulates the portfolio valuation
+        Run the simulation
+        :param n - number of times the simulation shall be run
+        :return: none
         """
 
-        # check that a dataframe for investments and disinvestments has already been generated
-        if "Investments" not in self.investments_disinvestments.columns and \
-                "Disinvestments" not in self.investments_disinvestments.columns:
-            raise ValueError("Before being able to create portfolio valuations a dataframe needs to be created "
-                             "that contains investments and disinvestments")
+        for i in range(n):
+            self.results[i] = self.create_simulation_df()
 
-        df = self.investments_disinvestments.copy()
-
-        # add a column for the return data (needs to be simulated)
-        df["Log return"] = self.return_generator.generate_monthly_returns(n=len(self.investments_disinvestments)).values
-
-        # add additional columns for PF valuation at the beginning and end of period
-        df["PF Beg"] = np.zeros(len(df))
-        df["PF End"] = np.zeros(len(df))
-
-        # loop through dataframe and update portfolio values
-        counter = 0
-        for index, row in df.iterrows():
-            if counter == 0:
-                row["PF Beg"] = self.investor.current_portfolio_value
-            else:
-                row["PF Beg"] = df.loc[previous_index, "PF End"]
-
-            if row["PF Beg"] < 0:
-                row["PF End"] = row["PF Beg"] + row["Investments"] - row["Disinvestments"]
-            else:
-                row["PF End"] = math.exp(row["Log return"]) * row["PF Beg"] + row["Investments"] - row["Disinvestments"]
-
-            previous_index = index
-            counter += 1
-
-        return df
-
-    def new_simulation(self):
+    def create_simulation_df(self) -> pd.DataFrame:
+        """
+        Simulate the time series and return the result as a dataframe
+        :return: Result of the simulation
+        """
         columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Investments", "Disinvestments",
                    "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end",
                    "Log return", "Share price", "Available shares"]
-        dates = pd.date_range(self.starting_date, self.ending_date, freq="M")
-        starting_date = min(dates).date()
-        ending_date = max(dates).date()
-        rel_delta = dateutil.relativedelta.relativedelta(ending_date, starting_date)
-        months_to_simulate = rel_delta.months + rel_delta.years * 12
-        df = pd.DataFrame(columns=columns, index=dates)
+        months_to_simulate = self.months_to_simulate
+        df = pd.DataFrame(columns=columns, index=self.dates)
         df_net_cashflows = self._create_net_cashflows()
-
         month = 0
         for index, row in df.iterrows():
             inflation_multiplier = (1 + self.inflation / 12) ** month
             target_investment = self.investor.target_investment_amount * inflation_multiplier
 
-            if index == starting_date:
+            if index == self.true_starting_date:
                 log_return = 0
                 share_price = 100
                 pf_beg = self.portfolio.determine_portfolio_value(share_price=share_price)
@@ -403,6 +416,8 @@ class Simulation:
                                                                    sale_price=share_price,
                                                                    partial_sale=True, tax_rate=0.26375)
             disinvestments = tax_estimator.determine_gross_transaction_volume(required_transactions)
+
+            # determine taxes
             taxes_abs, taxes_rel = tax_estimator.taxes_for_transactions(transactions=required_transactions,
                                                                         share_price=share_price)
             df.loc[index, "Disinvestments"] = disinvestments
@@ -424,7 +439,7 @@ class Simulation:
             month += 1
             months_to_simulate -= 1
 
-        pprint(df)
+        return df
 
         # todo: write function for storing the data in self.results, e.g. similar to create_portfolio valuations
 
@@ -448,7 +463,7 @@ class Simulation:
 
         # ax1
         for sim_run, df in self.results.items():
-            ax1.plot(df.index, df["PF End"])
+            ax1.plot(df.index, df["PF end"])
         ax1.axhline(0, linestyle='dotted', color='grey')  # horizontal lines
         ax1.axvline(datetime.date(2051, 1, 31), linestyle="--", color="black")
         ax1.set_ylim(-3000000, 30000000)
@@ -463,7 +478,7 @@ class Simulation:
         for date in self.investments_disinvestments.index:
             valuations = []
             for df in self.results.values():
-                valuations.append(int(df.loc[date, "PF End"]))
+                valuations.append(int(df.loc[date, "PF end"]))
             pf_valuations_lower_percentile[date] = np.percentile(valuations, lower_percentile)
             pf_valuations_median[date] = np.percentile(valuations, 50)
             pf_valuations_upper_percentile[date] = np.percentile(valuations, upper_percentile)
@@ -588,14 +603,17 @@ if __name__ == '__main__':
     #
     yearly_return = 0.08
     yearly_vola = 0.18
-    number_of_simulations = 500
+    number_of_simulations = 2
 
     investor = Investor("Me", "Lord", datetime.date(1984, 1, 22),
                         living_expenses=3000,
                         target_investment_amount=4500.0,
                         investment_cap=True,
-                        tax_rate=0.05,
                         safety_buffer=True)
+
+    # todo: make sure the investment cap is considered properly
+    # todo: make sure the safety buffer is considered properly
+    # todo: create an object for tax exemption
 
     pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=0.1)
 
@@ -620,9 +638,9 @@ if __name__ == '__main__':
                                        ending_date=simulation.ending_date, perc_increase_per_year=0.02)
     simulation.add_cashflow(cashflow=cashflows.Inheritance(50000, datetime.date(2040, 3, 2)))
 
-    simulation.new_simulation()
-    # simulation.run_simulation(n=number_of_simulations)
+    # simulation.create_simulation_df()
+    simulation.run_simulation(n=number_of_simulations)
     # pprint(simulation.analyze_results())
-    # simulation.plot_results()
+    simulation.plot_results()
 
     # todo: inheritance is still capped by investment cap which shouldn't be the case
