@@ -4,6 +4,8 @@ import numpy as np
 from pprint import pprint
 from typing import Tuple
 
+import taxes
+
 
 def calculate_taxes(sale_price: float, historical_price: float, number_of_shares: float,
                     tax_rate: float = 0.26375, tax_exemption: float = 0) -> Tuple[float, float]:
@@ -31,6 +33,7 @@ def calculate_taxes(sale_price: float, historical_price: float, number_of_shares
 class Portfolio:
     fifo: OrderedDict = field(init=False)
     running_id: int = field(init=False)
+    tax_base: taxes.TaxBase = taxes.TaxBase()
     initial_portfolio_value: float = 0
     initial_perc_gain: float = 0
 
@@ -59,6 +62,25 @@ class Portfolio:
         else:
             return 0
 
+    def determine_next_available_net_proceeds(self, sale_price: float):
+        """
+        Determine the next available net proceeds, i.e. the net proceeds of the first position in the FIFO stack
+        :param sale_price: the price at which available securities could be sold
+        :return: the amount of available net proceeds achievable by selling the first FIFO position entirely
+        """
+        if sale_price < 0:
+            raise ValueError("The sale price must be larger than zero.")
+
+        next_transaction_id = next(iter(self.fifo))
+        next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
+        historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
+        taxable = self.tax_base.determine_taxable(sale_price, historical_price, next_available_nr_shares)
+        taxes_abs = self.tax_base.calculate_taxes(taxable, sale_price, next_available_nr_shares)["Taxes absolute"]
+        available_gross_proceeds = next_available_nr_shares * sale_price
+        available_net_proceeds = available_gross_proceeds - taxes_abs
+
+        return available_net_proceeds
+
     def determine_portfolio_value(self, share_price: float) -> float:
         """
         Determine the value of the portfolio based on a given share price
@@ -71,53 +93,38 @@ class Portfolio:
         available_shares = self.determine_available_shares()
         return available_shares * share_price
 
-    def sell_net_volume(self, target_net_proceeds: float, sale_price: float, tax_rate: float = 0.26375,
-                        tax_exemption: float = 0,
-                        partial_sale: bool = False) -> OrderedDict:
+    def sell_net_volume(self, target_net_proceeds: float, sale_price: float, partial_sale: bool = False) -> OrderedDict:
         """
         Sell a certain volume of the portfolio such that the net proceeds are equal to the target net proceeds
         :param target_net_proceeds: the target proceeds after taxes
         :param sale_price: the price at which shares are to be sold
-        :param tax_rate: the tax rate at which gains are taxed
-        :param tax_exemption: the tax exemption amount that will not be taxed
         :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
             the target net
         :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
         """
+        # Check if the sale of the first element in the portfolios FIFO stack would be sufficient to satisfy the
+        # target net proceeds by calculating the theoretical net proceeds
+        fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
         sale_transactions = OrderedDict()
         net_proceeds = 0
-        fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
         while round(net_proceeds, 2) < round(target_net_proceeds, 2):
             try:
+                available_net_proceeds = self.determine_next_available_net_proceeds(sale_price=sale_price)
                 next_transaction_id = next(iter(self.fifo))
                 next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
                 historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
-                available_gross_proceeds = next_available_nr_shares * sale_price
-                taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                        number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
-                                        tax_exemption=tax_exemption)[0]
-                available_net_proceeds = available_gross_proceeds - taxes
                 if net_proceeds + available_net_proceeds >= target_net_proceeds:
-                    required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
-                                                               sale_price=sale_price, historical_price=historical_price,
-                                                               tax_rate=tax_rate, tax_exemption=tax_exemption)[1]
-                    transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
-                    shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
-                    taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                            number_of_shares=shares_to_be_sold, tax_rate=tax_rate,
-                                            tax_exemption=tax_exemption)[0]
-                    gross_proceeds = shares_to_be_sold * sale_price
-                    net_proceeds += gross_proceeds - taxes
-                    sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
 
+                    shares_to_sell = self.tax_base.nr_shares_for_net_proceeds(target_net_proceeds, sale_price,
+                                                                              historical_price)
+                    self.sell_shares(shares_to_sell, sale_price)
                 else:
-                    self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
-                    taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
-                                            number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
-                                            tax_exemption=tax_exemption)[0]
-                    gross_proceeds = next_available_nr_shares * sale_price
-                    net_proceeds += gross_proceeds - taxes
-                    sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
+                    shares_to_sell = next_available_nr_shares
+                    self.sell_shares(nr_shares=shares_to_sell, sale_price=sale_price)
+
+                net_proceeds += self.tax_base.determine_net_proceeds(shares_to_sell, sale_price, historical_price)
+                sale_transactions[shares_to_sell] = [historical_price, sale_price]
+
             except StopIteration as err:
                 print(err)
                 if partial_sale:
@@ -128,6 +135,235 @@ class Portfolio:
                     break  # break out of the While loop
 
         return sale_transactions
+        #
+        # sale_transactions = OrderedDict()
+        # tax_exemption = self.tax_base.tax_exemption
+        # loss_pot = self.tax_base.loss_pot
+        # withheld_taxes = self.tax_base.withheld_taxes
+        # net_proceeds = 0
+        # fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
+        # while round(net_proceeds, 2) < round(target_net_proceeds, 2):
+        #     try:
+        #         next_transaction_id = next(iter(self.fifo))
+        #         next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
+        #         historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
+        #         available_gross_proceeds = next_available_nr_shares * sale_price
+        #         taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, next_available_nr_shares)
+        #         taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+        #         available_net_proceeds = available_gross_proceeds - taxes_dict["Taxes absolute"]
+        #         if net_proceeds + available_net_proceeds >= target_net_proceeds:
+        #             required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
+        #                                                        sale_price=sale_price, historical_price=historical_price,
+        #                                                        tax_rate=self.tax_base.tax_rate,
+        #                                                        tax_exemption=tax_exemption)[1]
+        #             transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
+        #             shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
+        #             taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, shares_to_be_sold)
+        #             taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, shares_to_be_sold)
+        #             gross_proceeds = shares_to_be_sold * sale_price
+        #             net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+        #             sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
+        #             self.tax_base.adjust_taxbase_via_sale(sale_price, historical_price, shares_to_be_sold)
+        #             tax_exemption, loss_pot, withheld_taxes = self.tax_base.determine_tax_exemption_and_loss_pot(
+        #                 sale_price, historical_price, shares_to_be_sold)
+        #         else:
+        #             self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
+        #             taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price,
+        #                                                              next_available_nr_shares)
+        #             taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+        #             gross_proceeds = next_available_nr_shares * sale_price
+        #             net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+        #             sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
+        #             self.tax_base.adjust_taxbase_via_sale(sale_price, historical_price, next_available_nr_shares)
+        #             tax_exemption, loss_pot, withheld_taxes = self.tax_base.determine_tax_exemption_and_loss_pot(
+        #                 sale_price, historical_price, next_available_nr_shares)
+        #     except StopIteration as err:
+        #         print(err)
+        #         if partial_sale:
+        #             break  # break out of the While loop
+        #         else:
+        #             self.fifo = fifo_copy  # restore original portfolio
+        #             sale_transactions = OrderedDict()
+        #             break  # break out of the While loop
+        #
+        # return sale_transactions
+
+    # def sell_net_volume(self, target_net_proceeds: float, sale_price: float, partial_sale: bool = False) -> OrderedDict:
+    #     """
+    #     Sell a certain volume of the portfolio such that the net proceeds are equal to the target net proceeds
+    #     :param target_net_proceeds: the target proceeds after taxes
+    #     :param sale_price: the price at which shares are to be sold
+    #     :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
+    #         the target net
+    #     :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
+    #     """
+    #     sale_transactions = OrderedDict()
+    #     tax_exemption = self.tax_base.tax_exemption
+    #     loss_pot = self.tax_base.loss_pot
+    #     withheld_taxes = self.tax_base.withheld_taxes
+    #     net_proceeds = 0
+    #     fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
+    #     while round(net_proceeds, 2) < round(target_net_proceeds, 2):
+    #         try:
+    #             next_transaction_id = next(iter(self.fifo))
+    #             next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
+    #             historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
+    #             available_gross_proceeds = next_available_nr_shares * sale_price
+    #             taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, next_available_nr_shares)
+    #             taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+    #             available_net_proceeds = available_gross_proceeds - taxes_dict["Taxes absolute"]
+    #             if net_proceeds + available_net_proceeds >= target_net_proceeds:
+    #                 required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
+    #                                                            sale_price=sale_price, historical_price=historical_price,
+    #                                                            tax_rate=self.tax_base.tax_rate,
+    #                                                            tax_exemption=tax_exemption)[1]
+    #                 transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
+    #                 shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
+    #                 taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, shares_to_be_sold)
+    #                 taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, shares_to_be_sold)
+    #                 gross_proceeds = shares_to_be_sold * sale_price
+    #                 net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+    #                 sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
+    #                 self.tax_base.adjust_taxbase_via_sale(sale_price, historical_price, shares_to_be_sold)
+    #                 tax_exemption, loss_pot, withheld_taxes = self.tax_base.determine_tax_exemption_and_loss_pot(
+    #                     sale_price, historical_price, shares_to_be_sold)
+    #             else:
+    #                 self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
+    #                 taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price,
+    #                                                                  next_available_nr_shares)
+    #                 taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+    #                 gross_proceeds = next_available_nr_shares * sale_price
+    #                 net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+    #                 sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
+    #                 self.tax_base.adjust_taxbase_via_sale(sale_price, historical_price, next_available_nr_shares)
+    #                 tax_exemption, loss_pot, withheld_taxes = self.tax_base.determine_tax_exemption_and_loss_pot(
+    #                     sale_price, historical_price, next_available_nr_shares)
+    #         except StopIteration as err:
+    #             print(err)
+    #             if partial_sale:
+    #                 break  # break out of the While loop
+    #             else:
+    #                 self.fifo = fifo_copy  # restore original portfolio
+    #                 sale_transactions = OrderedDict()
+    #                 break  # break out of the While loop
+    #
+    #     return sale_transactions
+
+
+    # def sell_net_volume(self, target_net_proceeds: float, sale_price: float, tax_rate: float = 0.26375,
+    #                     tax_exemption: float = 0,
+    #                     partial_sale: bool = False) -> OrderedDict:
+    #     """
+    #     Sell a certain volume of the portfolio such that the net proceeds are equal to the target net proceeds
+    #     :param target_net_proceeds: the target proceeds after taxes
+    #     :param sale_price: the price at which shares are to be sold
+    #     :param tax_rate: the tax rate at which gains are taxed
+    #     :param tax_exemption: the tax exemption amount that will not be taxed
+    #     :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
+    #         the target net
+    #     :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
+    #     """
+    #     sale_transactions = OrderedDict()
+    #     net_proceeds = 0
+    #     fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
+    #     while round(net_proceeds, 2) < round(target_net_proceeds, 2):
+    #         try:
+    #             next_transaction_id = next(iter(self.fifo))
+    #             next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
+    #             historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
+    #             available_gross_proceeds = next_available_nr_shares * sale_price
+    #             taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, next_available_nr_shares)
+    #             taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+    #             available_net_proceeds = available_gross_proceeds - taxes_dict["Taxes absolute"]
+    #             if net_proceeds + available_net_proceeds >= target_net_proceeds:
+    #                 required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
+    #                                                            sale_price=sale_price, historical_price=historical_price,
+    #                                                            tax_rate=self.tax_base.tax_rate,
+    #                                                            tax_exemption=self.tax_base.tax_exemption)[1]
+    #                 transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
+    #                 shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
+    #                 taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price, shares_to_be_sold)
+    #                 taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, shares_to_be_sold)
+    #                 gross_proceeds = shares_to_be_sold * sale_price
+    #                 net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+    #                 sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
+    #             else:
+    #                 self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
+    #                 taxable_amount = self.tax_base.determine_taxable(sale_price, historical_price,
+    #                                                                  next_available_nr_shares)
+    #                 taxes_dict = self.tax_base.calculate_taxes(taxable_amount, sale_price, next_available_nr_shares)
+    #                 gross_proceeds = next_available_nr_shares * sale_price
+    #                 net_proceeds += gross_proceeds - taxes_dict["Taxes absolute"]
+    #                 sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
+    #         except StopIteration as err:
+    #             print(err)
+    #             if partial_sale:
+    #                 break  # break out of the While loop
+    #             else:
+    #                 self.fifo = fifo_copy  # restore original portfolio
+    #                 sale_transactions = OrderedDict()
+    #                 break  # break out of the While loop
+    #
+    #     return sale_transactions
+
+    # def sell_net_volume(self, target_net_proceeds: float, sale_price: float, tax_rate: float = 0.26375,
+    #                     tax_exemption: float = 0,
+    #                     partial_sale: bool = False) -> OrderedDict:
+    #     """
+    #     Sell a certain volume of the portfolio such that the net proceeds are equal to the target net proceeds
+    #     :param target_net_proceeds: the target proceeds after taxes
+    #     :param sale_price: the price at which shares are to be sold
+    #     :param tax_rate: the tax rate at which gains are taxed
+    #     :param tax_exemption: the tax exemption amount that will not be taxed
+    #     :param partial_sale: if False then the sales are reversed if the available volume is not sufficient to satisfy
+    #         the target net
+    #     :return: Ordered dict of shares to be sold (key) and their respective historical price and sale price (value)
+    #     """
+    #     sale_transactions = OrderedDict()
+    #     net_proceeds = 0
+    #     fifo_copy = self.fifo.copy()  # used to restore the portfolio if net proceeds are insufficient to make the sale
+    #     while round(net_proceeds, 2) < round(target_net_proceeds, 2):
+    #         try:
+    #             next_transaction_id = next(iter(self.fifo))
+    #             next_available_nr_shares = self.fifo[next_transaction_id][0]  # next "nr of shares" in portfolio
+    #             historical_price = self.fifo[next_transaction_id][1]  # next "historical price" in portfolio
+    #             available_gross_proceeds = next_available_nr_shares * sale_price
+    #             taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
+    #                                     number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
+    #                                     tax_exemption=tax_exemption)[0]
+    #             available_net_proceeds = available_gross_proceeds - taxes
+    #             if net_proceeds + available_net_proceeds >= target_net_proceeds:
+    #                 required_gross_sale = determine_gross_sale(target_net_proceeds=target_net_proceeds - net_proceeds,
+    #                                                            sale_price=sale_price, historical_price=historical_price,
+    #                                                            tax_rate=tax_rate, tax_exemption=tax_exemption)[1]
+    #                 transactions = self.sell_gross_volume(gross_proceeds=required_gross_sale, sale_price=sale_price)
+    #                 shares_to_be_sold, (historical_price, sale_price) = next(iter(transactions.items()))
+    #                 taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
+    #                                         number_of_shares=shares_to_be_sold, tax_rate=tax_rate,
+    #                                         tax_exemption=tax_exemption)[0]
+    #                 gross_proceeds = shares_to_be_sold * sale_price
+    #                 net_proceeds += gross_proceeds - taxes
+    #                 sale_transactions[shares_to_be_sold] = [historical_price, sale_price]
+    #
+    #             else:
+    #                 self.sell_shares(nr_shares=next_available_nr_shares, sale_price=sale_price)
+    #                 taxes = calculate_taxes(sale_price=sale_price, historical_price=historical_price,
+    #                                         number_of_shares=next_available_nr_shares, tax_rate=tax_rate,
+    #                                         tax_exemption=tax_exemption)[0]
+    #                 gross_proceeds = next_available_nr_shares * sale_price
+    #                 net_proceeds += gross_proceeds - taxes
+    #                 sale_transactions[next_available_nr_shares] = [historical_price, sale_price]
+    #         except StopIteration as err:
+    #             print(err)
+    #             if partial_sale:
+    #                 break  # break out of the While loop
+    #             else:
+    #                 self.fifo = fifo_copy  # restore original portfolio
+    #                 sale_transactions = OrderedDict()
+    #                 break  # break out of the While loop
+    #
+    #     return sale_transactions
+
 
     def sell_gross_volume(self, gross_proceeds: float, sale_price: float) -> OrderedDict:
         """
@@ -145,7 +381,7 @@ class Portfolio:
         Sell a certain number of shares from the portfolio (FIFO procedure)
         :param nr_shares: the number of shares to be sold
         :param sale_price: the price at which the shares are sold
-        :return: Ordered dictionary of shares to be sold (key) and their respective historical price (value)
+        :return: Ordered dictionary of shares to be sold (key) and their respective historical and sale price (value)
         """
         shares_sold = 0
         transactions = OrderedDict()
@@ -161,6 +397,11 @@ class Portfolio:
                 shares_to_be_sold, historical_price = self.fifo.popitem(last=False)[1]
                 shares_sold += shares_to_be_sold
             transactions[shares_to_be_sold] = [historical_price, sale_price]
+
+        for key, value in transactions.items():
+            shares = key
+            historical_price = value[0]
+            self.tax_base.adjust_taxbase_via_sale(sale_price, historical_price, shares)
 
         return transactions
 
@@ -207,73 +448,6 @@ def taxes_for_transactions(transactions: OrderedDict, share_price: float, tax_ra
         taxes_rel = 0
 
     return taxes_abs, taxes_rel
-
-
-@dataclass
-class TaxBase:
-    tax_exemption: float = 1000
-    loss_pot: float = 0
-    withheld_taxes: float = 0
-    tax_rate: float = 0.26375
-
-    def adjust_tax_exemption(self, adjustment: float) -> None:
-        """
-        Adjust the tax exemption by the given adjustment amount
-        :param adjustment: amount by which the tax exemption is to be adjusted
-        :return: None
-        """
-
-        assert self.tax_exemption + adjustment > 0
-
-        self.tax_exemption += adjustment
-
-    def sell_securities(self, sale_price: float, historical_price: float, nr_shares: float) -> dict:
-        """
-        Adjust the tax exemption amount and/or loss pot based on a sale of securities and the respective gain/loss
-        :param sale_price: price at which the securities are sold
-        :param historical_price: price at which the securities were bought
-        :param nr_shares: number of shares being sold
-        :return: return dict of taxable amount, absolute and relative taxes
-        """
-
-        gain_loss = nr_shares * (sale_price - historical_price)
-        residual_gain_loss = max(0, gain_loss - self.loss_pot)
-
-        # adjust loss pot
-        self.loss_pot = max(0, self.loss_pot - gain_loss)
-
-        # adjust tax exemption
-        if residual_gain_loss > 0:
-            taxable = max(0, residual_gain_loss - self.tax_exemption)
-            self.tax_exemption = max(0, self.tax_exemption - residual_gain_loss)
-        else:
-            taxable = 0
-
-        # adjust taxes withheld
-        taxes = self._calculate_taxes(taxable=taxable, sale_price=sale_price, nr_shares=nr_shares)
-        self.withheld_taxes += taxes["Taxes absolute"]
-
-        result = {"Taxes absolute": taxes["Taxes absolute"],
-                  "Taxes relative": taxes["Taxes relative"],
-                  "Taxable": taxable}
-
-        return result
-
-    def _calculate_taxes(self, taxable: float, sale_price: float, nr_shares: float) -> dict:
-        """
-        Calculate the absolute and relative taxes for a securities sale
-        :param taxable: the amount that is to be taxed
-        :param sale_price: price at which the securities are sold
-        :param nr_shares: number of shares being sold
-        :return: dictionary of absolute and relative taxes
-        """
-        taxes_abs = taxable * self.tax_rate
-        try:
-            taxes_rel = taxes_abs / (sale_price * nr_shares)
-        except ZeroDivisionError:
-            taxes_rel = 0
-
-        return {"Taxes absolute": taxes_abs, "Taxes relative": taxes_rel}
 
 
 def determine_gross_transaction_volume(transactions: OrderedDict) -> float:

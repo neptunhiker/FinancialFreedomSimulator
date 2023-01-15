@@ -238,9 +238,9 @@ class Simulation:
         Simulate the time series and return the result as a dataframe
         :return: Result of the simulation
         """
-        columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Tax exemption beg", "Investments",
-                   "Disinvestments",
-                   "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end", "Tax exemption end",
+        columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Loss pot beg", "Tax exemption beg",
+                   "Investments", "Disinvestments",
+                   "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end", "Loss pot end", "Tax exemption end",
                    "Log return", "Share price", "Available shares"]
         months_to_simulate = self.months_to_simulate
         df = pd.DataFrame(columns=columns, index=self.dates)
@@ -249,23 +249,30 @@ class Simulation:
         for index, row in df.iterrows():
             inflation_multiplier = (1 + self.inflation / 12) ** month
             target_investment = self.investor.target_investment_amount * inflation_multiplier
-            tax_exemption = self.investor.tax_exemption * inflation_multiplier
+
+            # adjust tax exemption once a year
+            if month % 12 == 0 and month != 0:
+                exemption_adjustment = int(self.portfolio.tax_base.tax_exemption * self.inflation)
+                self.portfolio.tax_base.adjust_tax_exemption(adjustment=exemption_adjustment)
 
             if index == self.true_starting_date:
                 log_return = 0
                 share_price = 100
                 pf_beg = self.portfolio.determine_portfolio_value(share_price=share_price)
-                tax_exemption_beg = self.investor.tax_exemption
+                tax_exemption_beg = self.portfolio.tax_base.tax_exemption
+                loss_pot_beg = self.portfolio.tax_base.loss_pot
             else:
                 pf_beg = df.loc[prev_index, "PF end"]
                 log_return = self.return_generator.generate_monthly_returns(n=1)[0]
                 share_price = df.loc[prev_index, "Share price"] * math.exp(log_return)
                 tax_exemption_beg = df.loc[prev_index, "Tax exemption end"]
+                loss_pot_beg = df.loc[prev_index, "Loss pot end"]
 
             df.loc[index, "PF beg"] = pf_beg
             df.loc[index, "Log return"] = log_return
             df.loc[index, "Share price"] = share_price
             df.loc[index, "Tax exemption beg"] = tax_exemption_beg
+            df.loc[index, "Loss pot beg"] = loss_pot_beg
 
             # to do: gross and net proceeds do not satisfy cash need on 2033-03-31
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
@@ -287,8 +294,7 @@ class Simulation:
             # determine disinvestment amount
             required_transactions = self.portfolio.sell_net_volume(target_net_proceeds=cash_need,
                                                                    sale_price=share_price,
-                                                                   partial_sale=True, tax_rate=0.26375,
-                                                                   tax_exemption=tax_exemption)
+                                                                   partial_sale=True)
             disinvestments = tax_estimator.determine_gross_transaction_volume(required_transactions)
             gain_loss = tax_estimator.determine_disinvestment_gain_or_loss(required_transactions)
 
@@ -299,8 +305,8 @@ class Simulation:
             df.loc[index, "Disinvestments"] = disinvestments
             df.loc[index, "Taxes abs."] = taxes_abs
             df.loc[index, "Taxes rel."] = taxes_rel
-            df.loc[index, "Tax exemption end"] = max(0, tax_exemption_beg - max(0, gain_loss))
-            # todo: tax exemption needs to increase at the beginning of each year
+            df.loc[index, "Tax exemption end"] = self.portfolio.tax_base.tax_exemption
+            df.loc[index, "Loss pot end"] = self.portfolio.tax_base.loss_pot
 
             net_proceeds = disinvestments - taxes_abs
             df.loc[index, "Net proceeds"] = net_proceeds

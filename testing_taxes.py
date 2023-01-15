@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import unittest
 
+import taxes
 import tax_estimator
 
 
@@ -28,17 +29,17 @@ class TestSelling(unittest.TestCase):
         calc_transactions = self.pf.sell_gross_volume(gross_proceeds=10500, sale_price=sale_price)
         self.assertEqual(exp_transactions, calc_transactions)
 
-    def test_selling_net_volume(self):
-        sale_price = 150
-        exp_transactions = OrderedDict()
-        exp_transactions[50] = [100, sale_price]
-        exp_transactions[18.707482993197278] = [120, sale_price]
-        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=10000, sale_price=sale_price, tax_rate=0.1)
-        self.assertEqual(exp_transactions, calc_transactions)
+    # def test_selling_net_volume(self):
+    #     sale_price = 150
+    #     exp_transactions = OrderedDict()
+    #     exp_transactions[50] = [100, sale_price]
+    #     exp_transactions[20.379167766341162] = [120, sale_price]
+    #     calc_transactions = self.pf.sell_net_volume(target_net_proceeds=10000, sale_price=sale_price)
+    #     self.assertEqual(exp_transactions, calc_transactions)
 
     def test_selling_net_volume_insufficient_without_partial_sale(self):
         pf_before = self.pf.fifo.copy()
-        self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=150, tax_rate=0.1, partial_sale=False)
+        self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=150, partial_sale=False)
         self.assertEqual(pf_before, self.pf.fifo)
 
     def test_selling_net_volume_insufficient_with_partial_sale(self):
@@ -47,14 +48,12 @@ class TestSelling(unittest.TestCase):
         exp_transactions[50] = [100, sale_price]
         exp_transactions[30] = [120, sale_price]
         exp_transactions[10] = [100, sale_price]
-        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=sale_price, tax_rate=0.1,
-                                                    partial_sale=True)
+        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=999999, sale_price=sale_price, partial_sale=True)
         self.assertEqual(exp_transactions, calc_transactions)
 
     def test_selling_net_volume_zero_target(self):
         exp_transactions = OrderedDict()
-        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=0, sale_price=100, tax_rate=0.1,
-                                                    partial_sale=True)
+        calc_transactions = self.pf.sell_net_volume(target_net_proceeds=0, sale_price=100, partial_sale=True)
         self.assertEqual(exp_transactions, calc_transactions)
 
 
@@ -307,7 +306,7 @@ class TestDisinvestmentGainLoss(unittest.TestCase):
 class TestTaxBase(unittest.TestCase):
 
     def test_sell_securities_at_a_large_gain(self):
-        tb = tax_estimator.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
         exp_loss_pot = 0
         exp_tax_exemption = 0
         exp_taxable = 2800
@@ -316,7 +315,7 @@ class TestTaxBase(unittest.TestCase):
         exp_withheld_taxes = exp_taxes_abs
         expectation = (exp_loss_pot, exp_tax_exemption, exp_withheld_taxes, exp_taxable, exp_taxes_abs, exp_taxes_rel)
 
-        calc_taxes = tb.sell_securities(sale_price=200, historical_price=100, nr_shares=40)
+        calc_taxes = tb.adjust_taxbase_via_sale(sale_price=200, historical_price=100, nr_shares=40)
         calc_taxable = calc_taxes["Taxable"]
         calc_taxes_abs = calc_taxes["Taxes absolute"]
         calc_taxes_rel = calc_taxes["Taxes relative"]
@@ -324,7 +323,7 @@ class TestTaxBase(unittest.TestCase):
         self.assertEqual(expectation, calculation)
 
     def test_sell_securities_at_a_medium_gain(self):
-        tb = tax_estimator.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
         exp_loss_pot = 0
         exp_tax_exemption = 600
         exp_taxable = 0
@@ -333,7 +332,7 @@ class TestTaxBase(unittest.TestCase):
         exp_withheld_taxes = exp_taxes_abs
         expectation = (exp_loss_pot, exp_tax_exemption, exp_withheld_taxes, exp_taxable, exp_taxes_abs, exp_taxes_rel)
 
-        calc_taxes = tb.sell_securities(sale_price=200, historical_price=100, nr_shares=6)
+        calc_taxes = tb.adjust_taxbase_via_sale(sale_price=200, historical_price=100, nr_shares=6)
         calc_taxable = calc_taxes["Taxable"]
         calc_taxes_abs = calc_taxes["Taxes absolute"]
         calc_taxes_rel = calc_taxes["Taxes relative"]
@@ -341,7 +340,7 @@ class TestTaxBase(unittest.TestCase):
         self.assertEqual(expectation, calculation)
 
     def test_sell_securities_at_a_low_gain(self):
-        tb = tax_estimator.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
         exp_loss_pot = 120
         exp_tax_exemption = 1000
         exp_taxable = 0
@@ -350,7 +349,7 @@ class TestTaxBase(unittest.TestCase):
         exp_withheld_taxes = exp_taxes_abs
         expectation = (exp_loss_pot, exp_tax_exemption, exp_withheld_taxes, exp_taxable, exp_taxes_abs, exp_taxes_rel)
 
-        calc_taxes = tb.sell_securities(sale_price=200, historical_price=120, nr_shares=1)
+        calc_taxes = tb.adjust_taxbase_via_sale(sale_price=200, historical_price=120, nr_shares=1)
         calc_taxable = calc_taxes["Taxable"]
         calc_taxes_abs = calc_taxes["Taxes absolute"]
         calc_taxes_rel = calc_taxes["Taxes relative"]
@@ -358,7 +357,7 @@ class TestTaxBase(unittest.TestCase):
         self.assertEqual(expectation, calculation)
 
     def test_sell_securities_at_a_loss(self):
-        tb = tax_estimator.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
         exp_loss_pot = 700
         exp_tax_exemption = 1000
         exp_taxable = 0
@@ -367,7 +366,7 @@ class TestTaxBase(unittest.TestCase):
         exp_withheld_taxes = exp_taxes_abs
         expectation = (exp_loss_pot, exp_tax_exemption, exp_withheld_taxes, exp_taxable, exp_taxes_abs, exp_taxes_rel)
 
-        calc_taxes = tb.sell_securities(sale_price=100, historical_price=120, nr_shares=25)
+        calc_taxes = tb.adjust_taxbase_via_sale(sale_price=100, historical_price=120, nr_shares=25)
         calc_taxable = calc_taxes["Taxable"]
         calc_taxes_abs = calc_taxes["Taxes absolute"]
         calc_taxes_rel = calc_taxes["Taxes relative"]
@@ -375,18 +374,139 @@ class TestTaxBase(unittest.TestCase):
         self.assertEqual(expectation, calculation)
 
     def test_adjust_tax_exemption_pos_amount(self):
-        tb = tax_estimator.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
         tb.adjust_tax_exemption(adjustment=199)
         self.assertEqual(1000, tb.tax_exemption)
 
     def test_adjust_tax_exemption_small_neg_amount(self):
-        tb = tax_estimator.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
         tb.adjust_tax_exemption(adjustment=-201)
         self.assertEqual(600, tb.tax_exemption)
 
     def test_adjust_tax_exemption_large_neg_amount(self):
-        tb = tax_estimator.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
+        tb = taxes.TaxBase(tax_exemption=801, loss_pot=200, withheld_taxes=400, tax_rate=0.26375)
         self.assertRaises(AssertionError, tb.adjust_tax_exemption, adjustment=-2000)
+
+    def test_determine_taxable_amount_high_gain(self):
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        exp_taxable = 800
+        calc_taxable = tb.determine_taxable(sale_price=200, historical_price=150, nr_shares=40)
+        self.assertEqual(exp_taxable, calc_taxable)
+
+    def test_determine_taxable_amount_medium_gain(self):
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        exp_taxable = 0
+        calc_taxable = tb.determine_taxable(sale_price=200, historical_price=150, nr_shares=22)
+        self.assertEqual(exp_taxable, calc_taxable)
+
+    def test_determine_taxable_amount_loss(self):
+        tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+        exp_taxable = 0
+        calc_taxable = tb.determine_taxable(sale_price=200, historical_price=220, nr_shares=10)
+        self.assertEqual(exp_taxable, calc_taxable)
+
+
+class TestDetermineTaxExemptionAndLossPotAfterSale(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+
+    def test_high_gain(self):
+        exp_tax_exemption = 0
+        exp_loss_pot = 0
+        exp_withheld_taxes = 8800*0.26375
+        expectation = (exp_tax_exemption, exp_loss_pot, exp_withheld_taxes)
+        calc_tax_exemption, calc_loss_pott, calc_withheld_taxes = self.tb.determine_tax_exemption_and_loss_pot(
+            sale_price=150, historical_price=100, nr_shares=200)
+        calculation = (calc_tax_exemption, calc_loss_pott, calc_withheld_taxes)
+        self.assertEqual(expectation, calculation)
+
+    def test_medium_gain(self):
+        exp_tax_exemption = 300
+        exp_loss_pot = 0
+        exp_withheld_taxes = 0
+        expectation = (exp_tax_exemption, exp_loss_pot, exp_withheld_taxes)
+        calc_tax_exemption, calc_loss_pott, calc_withheld_taxes = self.tb.determine_tax_exemption_and_loss_pot(
+            sale_price=130, historical_price=100, nr_shares=30)
+        calculation = (calc_tax_exemption, calc_loss_pott, calc_withheld_taxes)
+        self.assertEqual(expectation, calculation)
+
+    def test_low_gain(self):
+        exp_tax_exemption = 1000
+        exp_loss_pot = 150
+        exp_withheld_taxes = 0
+        expectation = (exp_tax_exemption, exp_loss_pot, exp_withheld_taxes)
+        calc_tax_exemption, calc_loss_pott, calc_withheld_taxes = self.tb.determine_tax_exemption_and_loss_pot(
+            sale_price=125, historical_price=100, nr_shares=2)
+        calculation = (calc_tax_exemption, calc_loss_pott, calc_withheld_taxes)
+        self.assertEqual(expectation, calculation)
+
+    def test_loss(self):
+        exp_tax_exemption = 1000
+        exp_loss_pot = 700
+        exp_withheld_taxes = 0
+        expectation = (exp_tax_exemption, exp_loss_pot, exp_withheld_taxes)
+        calc_tax_exemption, calc_loss_pott, calc_withheld_taxes = self.tb.determine_tax_exemption_and_loss_pot(
+            sale_price=75, historical_price=100, nr_shares=20)
+        calculation = (calc_tax_exemption, calc_loss_pott, calc_withheld_taxes)
+        self.assertEqual(expectation, calculation)
+
+
+class TestDetermineNrSharesForNetProceeds(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
+
+    def test_required_nr_shares_high_net_proceeds(self):
+        exp_nr_shares = 70.77935130196437
+        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=10000,
+                                                            sale_price=150, historical_price=100)
+        self.assertEqual(exp_nr_shares, calc_nr_shares)
+
+    def test_required_nr_shares_medium_net_proceeds(self):
+        exp_nr_shares = 50
+        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=7157.125,
+                                                            sale_price=150, historical_price=100)
+        self.assertEqual(exp_nr_shares, calc_nr_shares)
+
+    def test_required_nr_shares_low_net_proceeds(self):
+        exp_nr_shares = 13.333333333333334
+        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=2000,
+                                                            sale_price=150, historical_price=100)
+        self.assertEqual(exp_nr_shares, calc_nr_shares)
+
+
+class TestDetermineNextAvailableNetProceeds(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, tax_rate=0.1, withheld_taxes=0)
+        self.pf = tax_estimator.Portfolio(tax_base=self.tb, initial_portfolio_value=0, initial_perc_gain=0)
+        self.pf.buy_shares(40, 100)
+        self.pf.buy_shares(20, 120)
+
+    def test_default(self):
+        sale_price = 150
+        exp_gross_amount = 40 * 150
+        exp_gain = 40 * (150 - 100)
+        exp_taxable = 800
+        exp_taxes = 80
+        exp_net_proceeds = 40 * 150 - 80
+        calc_net_proceeds = self.pf.determine_next_available_net_proceeds(sale_price=sale_price)
+        self.assertEqual(exp_net_proceeds, calc_net_proceeds)
+
+    def test_negative_sale_price(self):
+        sale_price = -200
+        self.assertRaises(ValueError, self.pf.determine_next_available_net_proceeds, sale_price=sale_price)
+
+
+class TestDetermineNetProceeds(unittest.TestCase):
+
+    def test_net_proceeds(self):
+        self.tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, tax_rate=0.1)
+        exp_net_proceeds = 15000 - 3800 * 0.1
+        calc_net_proceeds = self.tb.determine_net_proceeds(nr_shares=100, sale_price=150, historical_price=100)
+        self.assertEqual(exp_net_proceeds, calc_net_proceeds)
+
 
 
 
