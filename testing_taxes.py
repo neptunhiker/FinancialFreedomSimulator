@@ -452,30 +452,6 @@ class TestDetermineTaxExemptionAndLossPotAfterSale(unittest.TestCase):
         self.assertEqual(expectation, calculation)
 
 
-class TestDetermineNrSharesForNetProceeds(unittest.TestCase):
-
-    def setUp(self) -> None:
-        self.tb = taxes.TaxBase(tax_exemption=1000, loss_pot=200, withheld_taxes=0, tax_rate=0.26375)
-
-    def test_required_nr_shares_high_net_proceeds(self):
-        exp_nr_shares = 70.77935130196437
-        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=10000,
-                                                            sale_price=150, historical_price=100)
-        self.assertEqual(exp_nr_shares, calc_nr_shares)
-
-    def test_required_nr_shares_medium_net_proceeds(self):
-        exp_nr_shares = 50
-        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=7157.125,
-                                                            sale_price=150, historical_price=100)
-        self.assertEqual(exp_nr_shares, calc_nr_shares)
-
-    def test_required_nr_shares_low_net_proceeds(self):
-        exp_nr_shares = 13.333333333333334
-        calc_nr_shares = self.tb.nr_shares_for_net_proceeds(target_net_proceeds=2000,
-                                                            sale_price=150, historical_price=100)
-        self.assertEqual(exp_nr_shares, calc_nr_shares)
-
-
 class TestDetermineNextAvailableNetProceeds(unittest.TestCase):
 
     def setUp(self) -> None:

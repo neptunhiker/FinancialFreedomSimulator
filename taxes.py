@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from typing import Tuple
 
 
@@ -16,7 +17,10 @@ class TaxBase:
         :param adjustment: amount by which the tax exemption is to be adjusted
         :return: None
         """
-        assert self.tax_exemption + adjustment >= 0
+        if not isinstance(adjustment, (int, float)):
+            raise ValueError("Adjustment must be a number.")
+        if adjustment < -self.tax_exemption:
+            raise ValueError("The adjustment may not lead to a negative tax exemption amount.")
 
         self.tax_exemption += adjustment
 
@@ -29,6 +33,7 @@ class TaxBase:
         :param historical_price: the price at which the existing shares are assumed to have been bought
         :return: the number of shares that would have to be bought to satisfy the net proceeds
         """
+        self._validate_inputs(target_net_proceeds, sale_price, historical_price)
 
         if sale_price < historical_price:
             req_shares = target_net_proceeds / sale_price
@@ -48,9 +53,27 @@ class TaxBase:
         taxable = self.determine_taxable(sale_price, historical_price, req_shares)
         taxes_abs = self.calculate_taxes(taxable, sale_price, req_shares)["Taxes absolute"]
         net_proceeds = req_shares * sale_price - taxes_abs
-        assert round(net_proceeds, 4) == round(target_net_proceeds, 4)
+
+        if not math.isclose(net_proceeds, target_net_proceeds, rel_tol=1e-4):
+            raise ValueError(f"net_proceeds: {net_proceeds} does not match target_net_proceeds: {target_net_proceeds}")
+
+        if req_shares < 0 or not math.isfinite(req_shares):
+            raise ValueError(f"invalid number of shares: {req_shares}")
+
+        #
+        # assert round(net_proceeds, 4) == round(target_net_proceeds, 4)
 
         return req_shares
+
+    def _validate_inputs(self, target_net_proceeds: float, sale_price: float, historical_price: float) -> None:
+        if not all(map(lambda x: isinstance(x, (int, float)), [target_net_proceeds, sale_price, historical_price])):
+            raise ValueError("target_net_proceeds, sale_price, and historical_price must be numbers.")
+        if not all(map(lambda x: math.isfinite(x), [target_net_proceeds, sale_price, historical_price])):
+            raise ValueError("target_net_proceeds, sale_price, and historical_price must be finite numbers.")
+        if not target_net_proceeds > 0:
+            raise ValueError("target_net_proceeds must be larger than zero.")
+
+
 
     def determine_tax_exemption_and_loss_pot(self, sale_price: float, historical_price: float,
                                              nr_shares: float) -> Tuple[float, float, float]:
