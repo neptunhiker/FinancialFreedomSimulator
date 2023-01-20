@@ -16,22 +16,6 @@ class TestHelperFunctions(unittest.TestCase):
 
 
 
-
-    def test_determine_cash_need_high_income(self):
-        cash_inflow = 10000
-        living_expenses = 3000
-        exp_cash_need = 0
-        calc_cash_need = simulator.determine_cash_need(cash_inflow, living_expenses)
-        self.assertEqual(exp_cash_need, calc_cash_need)
-
-    def test_determine_cash_need_high_living_expenses(self):
-        cash_inflow = 1000
-        living_expenses = 3000
-        exp_cash_need = 2000
-        calc_cash_need = simulator.determine_cash_need(cash_inflow, living_expenses)
-        self.assertEqual(exp_cash_need, calc_cash_need)
-
-
 class TestSimulationAddingCashflows(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -184,26 +168,8 @@ class TestAddingRecurringCashflows(unittest.TestCase):
 
 class TestAnalysisOfSimulationResults(unittest.TestCase):
 
-    def test_survival_of_portfolio_true(self):
-        series = pd.Series(data=[23, 0, 12, 45])
-        self.assertTrue(simulator.determine_survival(series))
 
-    def test_survival_of_portfolio_false(self):
-        series = pd.Series(data=[23, 0, -2, 45])
-        self.assertFalse(simulator.determine_survival(series))
 
-    def test_timing_of_portfolio_death(self):
-        self.assertEqual(3, simulator.determine_portfolio_death(pd.Series(data=[23, 0, 2, -5])))
-        self.assertEqual(0, simulator.determine_portfolio_death(pd.Series(data=[-2, 0, 2, -5])))
-        self.assertEqual(1, simulator.determine_portfolio_death(pd.Series(data=[23, -3, 2, -5])))
-        self.assertTrue(math.isnan(simulator.determine_portfolio_death(pd.Series(data=[23, 3, 2, 232]))))
 
-    def test_survival_probability(self):
-        series_01 = pd.Series(data=[23, 0, 2, -5])
-        series_02 = pd.Series(data=[23, 0, 2, 12])
-        series_03 = pd.Series(data=[23, 0, 2, 16])
-        series_04 = pd.Series(data=[23, 0, 2, 99])
-        expected_result = 0.75
-        calculated_result = simulator.analyze_survival_probability([series_01, series_02, series_03, series_04])
 
-        self.assertEqual(expected_result, calculated_result)
+

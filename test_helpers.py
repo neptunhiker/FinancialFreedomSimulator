@@ -1,7 +1,39 @@
-import math
-import unittest
-import helpers
 from datetime import date
+import math
+import pandas as pd
+import unittest
+
+import helpers
+
+
+class TestAnalyzeSurvivalProbability(unittest.TestCase):
+
+    def test_survival_probability(self):
+        series_01 = pd.Series(data=[23, 20, 2, -5])
+        series_02 = pd.Series(data=[23, 34, 2, 12])
+        series_03 = pd.Series(data=[23, 34, 2, 16])
+        series_04 = pd.Series(data=[23, 34, 2, 99])
+        expected_result = 0.75
+        calculated_result = helpers.analyze_survival_probability([series_01, series_02, series_03, series_04])
+        self.assertEqual(expected_result, calculated_result)
+
+    def test_survival_probability_empty_list(self):
+        """
+        Test that passing an empty list results in an error
+        """
+        with self.assertRaises(ValueError):
+            helpers.analyze_survival_probability([])
+
+    def test_survival_probability_all_positive(self):
+        """
+        Test that passing a list of all positive series results in a probability of 1
+        """
+        series_01 = pd.Series(data=[23, 34, 45, 56])
+        series_02 = pd.Series(data=[100, 200, 300, 400])
+        series_03 = pd.Series(data=[1, 2, 3, 4])
+        expected_result = 1
+        calculated_result = helpers.analyze_survival_probability([series_01, series_02, series_03])
+        self.assertEqual(expected_result, calculated_result)
 
 
 class TestDetermineAge(unittest.TestCase):
@@ -23,6 +55,42 @@ class TestDetermineAge(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             helpers.determine_age(date(1999, 1, 1), date(2022, 1, 1))
         self.assertEqual("The date has to be larger than the birthdate", str(context.exception))
+
+
+class TestDetermineCashNeed(unittest.TestCase):
+
+    def test_determine_cash_need_high_income(self):
+        cash_inflow = 10000
+        living_expenses = 3000
+        exp_cash_need = 0
+        calc_cash_need = helpers.determine_cash_need(cash_inflow, living_expenses)
+        self.assertEqual(exp_cash_need, calc_cash_need)
+
+    def test_determine_cash_need_high_living_expenses(self):
+        cash_inflow = 1000
+        living_expenses = 3000
+        exp_cash_need = 2000
+        calc_cash_need = helpers.determine_cash_need(cash_inflow, living_expenses)
+        self.assertEqual(exp_cash_need, calc_cash_need)
+
+    def test_determine_cash_need_equal_income_and_expenses(self):
+        cash_inflow = 1000
+        living_expenses = 1000
+        exp_cash_need = 0
+        calc_cash_need = helpers.determine_cash_need(cash_inflow, living_expenses)
+        self.assertEqual(exp_cash_need, calc_cash_need)
+
+    def test_determine_cash_need_negative_income(self):
+        cash_inflow = -100
+        living_expenses = 1000
+        with self.assertRaises(ValueError):
+            helpers.determine_cash_need(cash_inflow, living_expenses)
+
+    def test_determine_cash_need_negative_living_expenses(self):
+        cash_inflow = 1000
+        living_expenses = -100
+        with self.assertRaises(ValueError):
+            helpers.determine_cash_need(cash_inflow, living_expenses)
 
 
 class TestDetermineDisinvestment(unittest.TestCase):
@@ -153,6 +221,25 @@ class TestDetermineLivingExpenses(unittest.TestCase):
         self.assertRaises(ValueError, helpers.determine_living_expenses, date_of_origin, living_expenses, future_date,
                           inflation)
 
+
+class TestDeterminePortfolioDeath(unittest.TestCase):
+
+    def test_timing_of_portfolio_death(self):
+        self.assertEqual(3, helpers.determine_portfolio_death(pd.Series(data=[23, 0, 2, -5])))
+        self.assertEqual(0, helpers.determine_portfolio_death(pd.Series(data=[-2, 0, 2, -5])))
+        self.assertEqual(1, helpers.determine_portfolio_death(pd.Series(data=[23, -3, 2, -5])))
+        self.assertTrue(math.isnan(helpers.determine_portfolio_death(pd.Series(data=[23, 3, 2, 232]))))
+
+
+class TestDetermineSurvival(unittest.TestCase):
+
+    def test_survival_of_portfolio_true(self):
+        series = pd.Series(data=[23, 10, 12, 45])
+        self.assertTrue(helpers.determine_survival(series))
+
+    def test_survival_of_portfolio_false(self):
+        series = pd.Series(data=[23, 0, -2, 45])
+        self.assertFalse(helpers.determine_survival(series))
 
 class TestValidatePositiveNumbers(unittest.TestCase):
 

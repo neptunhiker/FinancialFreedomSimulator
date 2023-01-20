@@ -1,6 +1,23 @@
 import datetime
 import math
+import numpy as np
+import pandas as pd
 from typing import List, Union
+
+
+def analyze_survival_probability(list_of_pf_valuations: List[pd.Series]) -> float:
+    """
+    Analyze the survival probability of a list of portfolio valuations over time.
+    :param list_of_pf_valuations: List[pd.Series] - a list of pandas Series representing portfolio valuations over time
+    :return: float - the probability that a portfolio has always been positive in value over time
+    """
+    if not list_of_pf_valuations:
+        raise ValueError("The list of portfolio valuations is empty.")
+
+    # use list comprehension to create a list of booleans representing survival
+    survivals = [determine_survival(series) for series in list_of_pf_valuations]
+
+    return sum(survivals) / len(survivals)
 
 
 def determine_age(date: datetime.date, birthdate: datetime.date) -> float:
@@ -10,6 +27,22 @@ def determine_age(date: datetime.date, birthdate: datetime.date) -> float:
 
     delta_in_years = (date - birthdate).days / 365.25
     return round(delta_in_years, 1)
+
+
+def determine_cash_need(cash_inflow: float, living_expenses: float) -> float:
+    """
+    Determine the cash need based on cash inflow and living expenses
+
+    :param cash_inflow: cash inflow
+    :param living_expenses: living expenses
+    :return: the amount of living expenses that cannot be covered by the cash inflow
+    """
+    if cash_inflow < 0:
+        raise ValueError("Cash inflow cannot be negative")
+    if living_expenses < 0:
+        raise ValueError("Living expenses cannot be negative")
+    return max(0, living_expenses - cash_inflow)
+
 
 
 def determine_disinvestment(cash_inflow: float, living_expenses: float, tax_rate: float, safety_buffer: bool = False,
@@ -65,6 +98,28 @@ def determine_living_expenses(date_of_origin: datetime.date, living_expenses_at_
     delta_in_years = (future_date - date_of_origin).days / 365.25
     increase_due_to_inflation = (1 + inflation) ** delta_in_years
     return living_expenses_at_date_of_origin * increase_due_to_inflation
+
+
+def determine_portfolio_death(series: pd.Series) -> Union[int, float]:
+    """
+    Determine the point in time of a portfolio having a negative valuation
+    series: pd.Series - a series of (portfolio) values
+    """
+
+    if determine_survival(series):
+        return np.nan
+    else:
+        return int(np.argmax(series.lt(0).to_numpy(), axis=0))
+
+
+def determine_survival(series: pd.Series) -> bool:
+    """
+    Determine whether a portfolio has always been positive in value over time
+
+    :param series: pd.Series - a series of (portfolio) values
+    :return: bool - True if the portfolio has always been positive in value over time, False otherwise
+    """
+    return (series.values > 0).all()
 
 
 def validate_positive_numbers(positive_numbers: List[Union[float, int]]) -> None:

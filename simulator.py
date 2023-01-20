@@ -14,57 +14,9 @@ from pprint import pprint
 from typing import List, Union, Tuple
 
 import cashflows
+import helpers
 import returngens
 import tax_estimator
-
-
-def analyze_survival_probability(list_of_pf_valuations: List[pd.Series]) -> float:
-    """Analyze how many portfolios of the simulation would have survived with a value greater than zero throughout time"""
-
-    survivals = []
-    for series in list_of_pf_valuations:
-        survivals.append(determine_survival(series))
-
-    return sum(survivals) / len(survivals)
-
-
-def determine_portfolio_death(series: pd.Series) -> Union[int, float]:
-    """
-    Determine the point in time of a portfolio having a negative valuation
-
-    series: pd.Series - a series of (portfolio) values
-    """
-
-    if determine_survival(series):
-        return np.nan
-    else:
-        return int(np.argmax(series.lt(0).to_numpy(), axis=0))
-
-
-def determine_survival(series: pd.Series) -> bool:
-    """
-    Determine whether a portfolio has always been positive in value over time
-
-    series: pd.Series - a series of (portflio) values
-    """
-    return (series >= 0).all()
-
-
-def determine_cash_need(cash_inflow: float, living_expenses) -> float:
-    """
-    Determine the cash need based on cash inflow and living expenses
-    :param cash_inflow: cash inflow
-    :param living_expenses: living expenses
-    :return: the amount of living expenses that cannot be covered by the cash inflow
-    """
-    return max(0, living_expenses - cash_inflow)
-
-
-
-
-
-
-
 
 
 
@@ -82,6 +34,7 @@ class Investor:
     @property
     def name(self):
         return f"{self.first_name} {self.last_name}"
+
 
 class Simulation:
 
@@ -105,7 +58,7 @@ class Simulation:
 
     def add_cashflow(self, cashflow: cashflows.Cashflow):
         """Add a cash inflow to the gross cashflows"""
-        investor_age = determine_investor_age(date=cashflow.date, investor_birthdate=self.investor.birthdate)
+        investor_age = helpers.determine_age(date=cashflow.date, birthdate=self.investor.birthdate)
         if cashflow.direction == "Cash inflow":
             amount = float(cashflow.amount)
         elif cashflow.direction == "Cash outflow":
@@ -220,10 +173,10 @@ class Simulation:
             df.loc[index, "Cash need"] = cash_need
 
             # determine investments
-            investments = determine_investment(cash_inflow=cash_inflow,
-                                               living_expenses=living_expenses,
-                                               target_investment=target_investment,
-                                               investment_cap=self.investor.investment_cap)
+            investments = helpers.determine_investment(cash_inflow=cash_inflow,
+                                                       living_expenses=living_expenses,
+                                                       target_investment=target_investment,
+                                                       investment_cap=self.investor.investment_cap)
             if investments > 0:
                 self.portfolio.buy_shares(nr_shares=investments / share_price, historical_price=share_price)
             df.loc[index, "Investments"] = investments
