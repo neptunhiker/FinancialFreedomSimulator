@@ -11,13 +11,12 @@ from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from typing import List, Union, Tuple
+from typing import Tuple
 
 import cashflows
 import helpers
 import returngens
 import tax_estimator
-
 
 
 @dataclass
@@ -167,7 +166,7 @@ class Simulation:
             # to do: gross and net proceeds do not satisfy cash need on 2033-03-31
             cash_inflow = df_net_cashflows.loc[index, "Cashflow"]
             living_expenses = self.investor.living_expenses * inflation_multiplier
-            cash_need = determine_cash_need(cash_inflow, living_expenses)
+            cash_need = helpers.determine_cash_need(cash_inflow, living_expenses)
             df.loc[index, "Cash inflow"] = cash_inflow
             df.loc[index, "Living expenses"] = living_expenses
             df.loc[index, "Cash need"] = cash_need
@@ -264,7 +263,7 @@ class Simulation:
         pf_valuations = []
         for df in self.results.values():
             pf_valuations.append(df["PF End"])
-        results["Survival probability"] = analyze_survival_probability(pf_valuations)
+        results["Survival probability"] = helpers.analyze_survival_probability(pf_valuations)
 
         # earliest portfolio death, i.e. valuation < 0
         if results["Survival probability"] == 1.0:
@@ -273,7 +272,7 @@ class Simulation:
             pf_valuation_dates = self.results[0].index
             pf_deaths = []
             for pf_valuation in pf_valuations:
-                pf_deaths.append(determine_portfolio_death(pf_valuation))
+                pf_deaths.append(helpers.determine_portfolio_death(pf_valuation))
             results["Earliest portfolio death"] = pf_valuation_dates[int(np.nanmin(pf_deaths))].date()
 
         return results
