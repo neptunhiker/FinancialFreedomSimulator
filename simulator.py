@@ -278,49 +278,6 @@ class Simulation:
         return results
 
 
-def return_simulator(monthly_investment: int = 4000, yearly_increase_of_monthly_investment: float = 0.02,
-                     months_to_simulate: int = 120, expected_rate_of_return: float = 0.08,
-                     initial_pf_value: int = 200000, plot: bool = False, inflation: float = 0.03) -> Tuple[int, int]:
-    """
-    Simulate the return path of a monthly investment with a given expected rate of return
-    """
-
-    df = pd.DataFrame(index=range(0, months_to_simulate + 1))
-    for i in range(0, months_to_simulate + 1):
-        if i == 0:
-            df.loc[i, "PF value nominal"] = initial_pf_value
-            df.loc[i, "PF value real"] = initial_pf_value
-        else:
-            df.loc[i, "PF value nominal"] = int(df.loc[i - 1, "PF value nominal"] * (1 + expected_rate_of_return / 12) + \
-                                                monthly_investment * (
-                                                        1 + yearly_increase_of_monthly_investment / 12) ** (
-                                                        i - 1))
-            df.loc[i, "PF value real"] = df.loc[i, "PF value nominal"] / (1 + inflation / 12) ** (i - 1)
-
-    if plot:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(df["PF value nominal"], label="PF value nominal")
-        ax.plot(df["PF value real"], label="PF value real")
-        fig.suptitle(f"Portfolio simulator based on monthly investments of {monthly_investment} EUR increasing "
-                     f"by {yearly_increase_of_monthly_investment * 100} % per year\nsimulated over "
-                     f"{months_to_simulate} months "
-                     f"({round(months_to_simulate / 12, 1)} years) with an inflation of {round(inflation * 100, 1)} %\n"
-                     f"and an expected rate of return of {round(expected_rate_of_return * 100, 1)} % per year. Initial "
-                     f"PF value: {format(initial_pf_value, ',')} EUR.")
-        plt.xlabel("Months")
-        plt.ylabel("PF value")
-        ax.grid()
-        ax.ticklabel_format(useOffset=False, style='plain')
-        ax.get_yaxis().set_major_formatter(
-            matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-        plt.legend()
-        fig.tight_layout()
-        plt.show()
-
-    nominal_final_value = int(df.iloc[-1]["PF value nominal"])
-    real_final_value = int(nominal_final_value / (1 + inflation) ** (months_to_simulate / 12))
-
-    return nominal_final_value, real_final_value
 
 
 if __name__ == '__main__':
