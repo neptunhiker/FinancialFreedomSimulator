@@ -1,15 +1,6 @@
 """
 This module simulates the return path of a monthly investment with a given expected rate of return. It has the ability to
-plot the portfolio value over time, and also adjust for inflation. It contains three main functions:
-
-simulate_portfolio(monthly_investment, yearly_increase_of_monthly_investment, months_to_simulate,
-expected_rate_of_return, initial_pf_value, inflation)
-
-plot_portfolio(df, title)
-
-return_simulator(monthly_investment, yearly_increase_of_monthly_investment, months_to_simulate, expected_rate_of_return,
-initial_pf_value, plot, inflation)
-
+plot the portfolio value over time, and also adjust for inflation.
 """
 
 import matplotlib
