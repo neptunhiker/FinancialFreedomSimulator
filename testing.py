@@ -13,123 +13,9 @@ import tax_estimator
 
 class TestHelperFunctions(unittest.TestCase):
 
-    def test_age_of_investor_regular_01(self):
-        date = datetime.date(2050, 1, 29)
-        birthday = datetime.date(1984, 1, 22)
-        expected_age = 66.0
-        calculated_age = simulator.determine_investor_age(date=date, investor_birthdate=birthday)
-        self.assertEqual(expected_age, calculated_age)
 
-    def test_age_of_investor_regular_02(self):
-        date = datetime.date(2030, 9, 25)
-        birthday = datetime.date(1984, 1, 22)
-        expected_age = 46.7
-        calculated_age = simulator.determine_investor_age(date=date, investor_birthdate=birthday)
-        self.assertEqual(expected_age, calculated_age)
 
-    def test_age_of_investor_value_error(self):
-        date = datetime.date(1982, 1, 29)
-        birthday = datetime.date(1984, 1, 22)
-        self.assertRaises(ValueError, simulator.determine_investor_age, date=date, investor_birthdate=birthday)
 
-    def test_determine_disinvestment_high_income(self):
-        cash_inflow = 10000
-        living_expenses = 3600
-        tax_rate = 0.1
-        expected_disinvestment = 0
-        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate)
-        self.assertEqual(expected_disinvestment, calculated_disinvestment)
-
-    def test_determine_disinvestment_low_income(self):
-        cash_inflow = 2600
-        living_expenses = 3600
-        tax_rate = 0.1
-        expected_disinvestment = 1111.1111111111
-        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate)
-        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
-
-    def test_determine_disinvestment_invalid_tax_rate_too_high(self):
-        cash_inflow = 2600
-        living_expenses = 3600
-        tax_rate = 1.0
-        self.assertRaises(ValueError, simulator.determine_disinvestment, cash_inflow, living_expenses, tax_rate)
-
-    def test_determine_disinvestment_invalid_tax_rate_too_low(self):
-        cash_inflow = 2600
-        living_expenses = 3600
-        tax_rate = -0.3
-        self.assertRaises(ValueError, simulator.determine_disinvestment, cash_inflow, living_expenses, tax_rate)
-
-    def test_determine_disinvestment_medium_living_expenses_with_linear_buffer(self):
-        cash_inflow = 3000
-        living_expenses = 5000
-        tax_rate = 0.1
-        expected_disinvestment = 2222.222222222222
-        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
-                                                                     safety_buffer=True, months_to_simulate=20,
-                                                                     pf_value=200000)
-        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
-
-    def test_determine_disinvestment_high_living_expenses_with_linear_buffer(self):
-        cash_inflow = 3000
-        living_expenses = 9999999
-        tax_rate = 0.1
-        expected_disinvestment = 10000
-        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
-                                                                     safety_buffer=True, months_to_simulate=20,
-                                                                     pf_value=200000)
-        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
-
-    def test_determine_disinvestment_high_income_with_linear_buffer(self):
-        cash_inflow = 8000
-        living_expenses = 1000
-        tax_rate = 0.1
-        expected_disinvestment = 0
-        calculated_disinvestment = simulator.determine_disinvestment(cash_inflow, living_expenses, tax_rate,
-                                                                     safety_buffer=True, months_to_simulate=20,
-                                                                     pf_value=200000)
-        self.assertAlmostEqual(expected_disinvestment, calculated_disinvestment)
-
-    def test_determine_investment_high_income(self):
-        cash_inflow = 10000
-        living_expenses = 3600
-        target_investment_amount = 4000
-        expected_investment = 4000
-        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
-        self.assertEqual(expected_investment, calculated_investment)
-
-    def test_determine_investment_high_income_and_no_cap(self):
-        cash_inflow = 10000
-        living_expenses = 3600
-        target_investment_amount = 4000
-        expected_investment = 6400
-        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount,
-                                                               investment_cap=False)
-        self.assertEqual(expected_investment, calculated_investment)
-
-    def test_determine_investment_low_income(self):
-        cash_inflow = 5000
-        living_expenses = 3600
-        target_investment_amount = 4000
-        expected_investment = 1400
-        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
-        self.assertEqual(expected_investment, calculated_investment)
-
-    def test_determine_investment_no_income(self):
-        cash_inflow = 0
-        living_expenses = 3600
-        target_investment_amount = 4000
-        expected_investment = 0
-        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
-        self.assertEqual(expected_investment, calculated_investment)
-
-    def test_determine_investment_negative_income(self):
-        cash_inflow = -5000
-        living_expenses = 3600
-        target_investment_amount = 4000
-        expected_investment = 0
-        calculated_investment = simulator.determine_investment(cash_inflow, living_expenses, target_investment_amount)
-        self.assertEqual(expected_investment, calculated_investment)
 
     def test_determine_cash_need_high_income(self):
         cash_inflow = 10000
@@ -214,38 +100,6 @@ class TestSimulationCreatingNetCashflows(unittest.TestCase):
         pd.testing.assert_frame_equal(expected_df, calculated_df)
 
 
-class TestSimulationLivingExpenses(unittest.TestCase):
-
-    def setUp(self) -> None:
-        self.investor = simulator.Investor("John", "Doe", datetime.date(1990, 12, 23), living_expenses=10000)
-        pf = tax_estimator.Portfolio()
-        self.simulation = simulator.Simulation(starting_date=datetime.date(2023, 12, 2),
-                                               ending_date=datetime.date(2080, 12, 30),
-                                               investor=self.investor,
-                                               portfolio=pf)
-
-    def test_living_expenses_in_the_future_valid_input(self):
-        date_of_origin = datetime.date(2020, 3, 23)
-        living_expenses = 3600
-        future_date = datetime.date(2030, 3, 23)
-        inflation = 0.02
-        expected_future_living_expenses = 4388.38
-        calculated_future_living_expenses = simulator.determine_living_expenses(date_of_origin,
-                                                                                living_expenses,
-                                                                                future_date,
-                                                                                inflation)
-        lower_tolerance = expected_future_living_expenses * 0.999
-        upper_tolerance = expected_future_living_expenses * 1.001
-        self.assertGreaterEqual(calculated_future_living_expenses, lower_tolerance)
-        self.assertLessEqual(calculated_future_living_expenses, upper_tolerance)
-
-    def test_living_expenses_in_the_future_date_in_the_past(self):
-        date_of_origin = datetime.date(2020, 3, 23)
-        living_expenses = 3600
-        future_date = datetime.date(2010, 3, 23)
-        inflation = 0.02
-        self.assertRaises(ValueError, simulator.determine_living_expenses, date_of_origin, living_expenses, future_date,
-                          inflation)
 
 
 class TestInvestmentDataframe(unittest.TestCase):

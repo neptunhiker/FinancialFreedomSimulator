@@ -5,7 +5,6 @@ from typing import Tuple
 import helpers
 
 
-
 @dataclass
 class TaxBase:
     tax_exemption: float = 1000
@@ -62,11 +61,7 @@ class TaxBase:
         if req_shares < 0 or not math.isfinite(req_shares):
             raise ValueError(f"invalid number of shares: {req_shares}")
 
-        #
-        # assert round(net_proceeds, 4) == round(target_net_proceeds, 4)
-
         return req_shares
-
 
     def determine_tax_exemption_and_loss_pot(self, sale_price: float, historical_price: float,
                                              nr_shares: float) -> Tuple[float, float, float]:
