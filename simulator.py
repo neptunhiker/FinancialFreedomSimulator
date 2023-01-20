@@ -326,20 +326,6 @@ class Simulation:
         pprint(df)
         return df
 
-        # todo: write function for storing the data in self.results, e.g. similar to create_portfolio valuations
-
-    # def run_simulation(self, n: int = 10) -> None:
-    #     """
-    #     Run the simulation
-    #
-    #     n: int - number of simulations
-    #     """
-    #
-    #     self.create_df_of_investments_and_disinvestments()
-    #
-    #     for i in range(n):
-    #         self.results[i] = self.create_portfolio_valuations()
-
     def plot_results(self) -> None:
         """Plot the simulation results"""
 
@@ -466,7 +452,6 @@ if __name__ == '__main__':
                         )
 
     # todo: make sure the investment cap is considered properly
-    # todo: make sure the safety buffer is considered properly
     # todo: create an object for tax exemption
 
     pf = tax_estimator.Portfolio(initial_portfolio_value=200000, initial_perc_gain=0.1)
