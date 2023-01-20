@@ -2,6 +2,8 @@ from dataclasses import dataclass
 import math
 from typing import Tuple
 
+import helpers
+
 
 
 @dataclass
@@ -33,7 +35,7 @@ class TaxBase:
         :param historical_price: the price at which the existing shares are assumed to have been bought
         :return: the number of shares that would have to be bought to satisfy the net proceeds
         """
-        self._validate_inputs(target_net_proceeds, sale_price, historical_price)
+        helpers.validate_positive_numbers([target_net_proceeds, sale_price, historical_price])
 
         if sale_price < historical_price:
             req_shares = target_net_proceeds / sale_price
@@ -64,15 +66,6 @@ class TaxBase:
         # assert round(net_proceeds, 4) == round(target_net_proceeds, 4)
 
         return req_shares
-
-    def _validate_inputs(self, target_net_proceeds: float, sale_price: float, historical_price: float) -> None:
-        if not all(map(lambda x: isinstance(x, (int, float)), [target_net_proceeds, sale_price, historical_price])):
-            raise ValueError("target_net_proceeds, sale_price, and historical_price must be numbers.")
-        if not all(map(lambda x: math.isfinite(x), [target_net_proceeds, sale_price, historical_price])):
-            raise ValueError("target_net_proceeds, sale_price, and historical_price must be finite numbers.")
-        if not target_net_proceeds > 0:
-            raise ValueError("target_net_proceeds must be larger than zero.")
-
 
 
     def determine_tax_exemption_and_loss_pot(self, sale_price: float, historical_price: float,
