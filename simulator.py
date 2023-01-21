@@ -11,7 +11,6 @@ from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pandas as pd
 from pprint import pprint
-from typing import Tuple
 
 import cashflows
 import helpers
@@ -28,7 +27,7 @@ class Investor:
     target_investment_amount: float = 4000.0
     investment_cap: bool = True
     safety_buffer: bool = False
-    tax_exemption: float = 1000
+    # tax_exemption: float = 1000  # todo: the tax exemption may not be needed anymore
 
     @property
     def name(self):
@@ -55,8 +54,12 @@ class Simulation:
         self.return_generator = return_generator
         self.results = dict()
 
-    def add_cashflow(self, cashflow: cashflows.Cashflow):
-        """Add a cash inflow to the gross cashflows"""
+    def add_cashflow(self, cashflow: cashflows.Cashflow) -> None:
+        """
+        Add a cash inflow to the gross cashflows
+        :param cashflow: the cashflow
+        :return None
+        """
         investor_age = helpers.determine_age(date=cashflow.date, birthdate=self.investor.birthdate)
         if cashflow.direction == "Cash inflow":
             amount = float(cashflow.amount)
@@ -112,16 +115,6 @@ class Simulation:
 
         return grouped
 
-    def run_simulation(self, n: int = 1) -> None:
-        """
-        Run the simulation
-        :param n - number of times the simulation shall be run
-        :return: none
-        """
-
-        for i in range(n):
-            self.results[i] = self.create_simulation_df()
-
     def create_simulation_df(self) -> pd.DataFrame:
         """
         Simulate the time series and return the result as a dataframe
@@ -130,7 +123,7 @@ class Simulation:
         columns = ["Cash inflow", "Living expenses", "Cash need", "PF beg", "Loss pot beg", "Tax exemption beg",
                    "Investments", "Disinvestments",
                    "Taxes abs.", "Taxes rel.", "Net proceeds", "PF end", "Loss pot end", "Tax exemption end",
-                   "Log return", "Share price", "Available shares"]
+                   "Log return", "Share price", "Available shares", "Cash need fulfillment"]
         months_to_simulate = self.months_to_simulate
         df = pd.DataFrame(columns=columns, index=self.dates)
         df_net_cashflows = self._create_net_cashflows()
@@ -186,11 +179,13 @@ class Simulation:
                                                                    partial_sale=True)
             disinvestments = tax_estimator.determine_gross_transaction_volume(required_transactions)
             gain_loss = tax_estimator.determine_disinvestment_gain_or_loss(required_transactions)
-
+            # todo the calculation of the disinvestment amount on 2033-02-28 seems to be almost twice as high as needed
+            # that is a bug that needs to be fixed
             # determine taxes
             taxes_abs, taxes_rel = tax_estimator.taxes_for_transactions(transactions=required_transactions,
                                                                         share_price=share_price,
                                                                         tax_exemption=tax_exemption_beg)
+            # todo: taxes for transactions method is wrong as it does not take into account the loss pot
             df.loc[index, "Disinvestments"] = disinvestments
             df.loc[index, "Taxes abs."] = taxes_abs
             df.loc[index, "Taxes rel."] = taxes_rel
@@ -214,6 +209,39 @@ class Simulation:
 
         pprint(df)
         return df
+
+    def run_simulation(self, n: int = 1) -> None:
+        """
+        Run the simulation
+        :param n - number of times the simulation shall be run
+        :return: none
+        """
+
+        for i in range(n):
+            self.results[i] = self.create_simulation_df()
+
+    def analyze_results(self) -> dict:
+        """Analyze the portfolio results"""
+
+        results = dict()
+
+        # survival probability
+        pf_valuations = []
+        for df in self.results.values():
+            pf_valuations.append(df["PF End"])
+        results["Survival probability"] = helpers.analyze_survival_probability(pf_valuations)
+
+        # earliest portfolio death, i.e. valuation < 0
+        if results["Survival probability"] == 1.0:
+            results["Earliest portfolio death"] = "All portfolios survived"
+        else:
+            pf_valuation_dates = self.results[0].index
+            pf_deaths = []
+            for pf_valuation in pf_valuations:
+                pf_deaths.append(helpers.determine_portfolio_death(pf_valuation))
+            results["Earliest portfolio death"] = pf_valuation_dates[int(np.nanmin(pf_deaths))].date()
+
+        return results
 
     def plot_results(self) -> None:
         """Plot the simulation results"""
@@ -253,31 +281,6 @@ class Simulation:
         plt.legend()
 
         plt.show()
-
-    def analyze_results(self) -> dict:
-        """Analyze the portfolio results"""
-
-        results = dict()
-
-        # survival probability
-        pf_valuations = []
-        for df in self.results.values():
-            pf_valuations.append(df["PF End"])
-        results["Survival probability"] = helpers.analyze_survival_probability(pf_valuations)
-
-        # earliest portfolio death, i.e. valuation < 0
-        if results["Survival probability"] == 1.0:
-            results["Earliest portfolio death"] = "All portfolios survived"
-        else:
-            pf_valuation_dates = self.results[0].index
-            pf_deaths = []
-            for pf_valuation in pf_valuations:
-                pf_deaths.append(helpers.determine_portfolio_death(pf_valuation))
-            results["Earliest portfolio death"] = pf_valuation_dates[int(np.nanmin(pf_deaths))].date()
-
-        return results
-
-
 
 
 if __name__ == '__main__':

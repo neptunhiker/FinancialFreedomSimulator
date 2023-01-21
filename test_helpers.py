@@ -241,6 +241,96 @@ class TestDetermineSurvival(unittest.TestCase):
         series = pd.Series(data=[23, 0, -2, 45])
         self.assertFalse(helpers.determine_survival(series))
 
+
+class TestDetermineTaxes(unittest.TestCase):
+
+    def test_calculate_taxes_no_tax_exemption_no_loss_pot(self):
+        sale_price = 10.0
+        historical_price = 4.0
+        number_of_shares = 2.0
+        tax_rate = 0.1
+        tax_exemption = 0
+        loss_pot = 0
+        expected_taxes_abs = 1.2
+        expected_taxes_rel = 1.2 / 20
+
+        taxes_abs, taxes_rel = helpers.determine_taxes(sale_price, historical_price, number_of_shares, tax_rate,
+                                                       tax_exemption, loss_pot)
+        self.assertAlmostEqual(taxes_abs, expected_taxes_abs, places=4)
+        self.assertAlmostEqual(taxes_rel, expected_taxes_rel, places=4)
+
+    def test_calculate_taxes_with_tax_exemption_and_loss_pot(self):
+        sale_price = 10.0
+        historical_price = 4.0
+        number_of_shares = 3.0
+        tax_rate = 0.1
+        tax_exemption = 10
+        loss_pot = 5
+        expected_taxes_abs = 0.3
+        expected_taxes_rel = 0.3 / 30
+
+        taxes_abs, taxes_rel = helpers.determine_taxes(sale_price, historical_price, number_of_shares, tax_rate,
+                                                       tax_exemption, loss_pot)
+        self.assertAlmostEqual(taxes_abs, expected_taxes_abs, places=4)
+        self.assertAlmostEqual(taxes_rel, expected_taxes_rel, places=4)
+
+    def test_negative_tax_exemption(self):
+        sale_price = 10.0
+        historical_price = 5.0
+        number_of_shares = 2.0
+        tax_rate = 0.26375
+        tax_exemption = -5.0
+        loss_pot = 2
+        self.assertRaises(ValueError, helpers.determine_taxes, sale_price, historical_price, number_of_shares, tax_rate,
+                          tax_exemption, loss_pot)
+
+    def test_negative_loss_pot(self):
+        sale_price = 10.0
+        historical_price = 5.0
+        number_of_shares = 2.0
+        tax_rate = 0.26375
+        tax_exemption = 10
+        loss_pot = -5
+        self.assertRaises(ValueError, helpers.determine_taxes, sale_price, historical_price, number_of_shares,
+                          tax_rate, tax_exemption, loss_pot)
+
+    def test_no_gain(self):
+        sale_price = 5.0
+        historical_price = 5.0
+        number_of_shares = 2.0
+        tax_rate = 0.26375
+        tax_exemption = 0
+        loss_pot = 0
+        taxes_abs, taxes_rel = helpers.determine_taxes(sale_price, historical_price, number_of_shares, tax_rate,
+                                                       tax_exemption, loss_pot)
+        self.assertEqual(taxes_abs, 0)
+        self.assertEqual(taxes_rel, 0)
+
+    def test_gain_less_than_tax_exemption(self):
+        sale_price = 7.0
+        historical_price = 5.0
+        number_of_shares = 2.0
+        tax_rate = 0.1
+        tax_exemption = 6
+        loss_pot = 0
+        taxes_abs, taxes_rel = helpers.determine_taxes(sale_price, historical_price, number_of_shares, tax_rate,
+                                                       tax_exemption, loss_pot)
+        self.assertEqual(taxes_abs, 0)
+        self.assertEqual(taxes_rel, 0)
+
+    def test_gain_less_than_tax_exemption_and_loss_pot(self):
+        sale_price = 7.0
+        historical_price = 5.0
+        number_of_shares = 4.0
+        tax_rate = 0.1
+        tax_exemption = 6
+        loss_pot = 4
+        taxes_abs, taxes_rel = helpers.determine_taxes(sale_price, historical_price, number_of_shares, tax_rate,
+                                                       tax_exemption, loss_pot)
+        self.assertEqual(taxes_abs, 0)
+        self.assertEqual(taxes_rel, 0)
+
+
 class TestValidatePositiveNumbers(unittest.TestCase):
 
     def test_validate_positive_numbers_with_valid_input(self):

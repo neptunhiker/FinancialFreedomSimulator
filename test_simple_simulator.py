@@ -1,9 +1,7 @@
-import matplotlib
 import pandas as pd
 import unittest
 
 import simple_simulator
-import unittest
 
 
 class TestSimulatePortfolio(unittest.TestCase):
@@ -16,6 +14,7 @@ class TestSimulatePortfolio(unittest.TestCase):
         self.assertIsInstance(df, pd.DataFrame)
         self.assertIsInstance(nominal_final_value, int)
         self.assertIsInstance(real_final_value, int)
+
 
 if __name__ == '__main__':
     unittest.main()
